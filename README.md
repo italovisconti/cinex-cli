@@ -25,15 +25,16 @@
 
 ## Indice
 
-- [Instalacion](#instalacion)
+- [Instalacion Rapida (Ejecutable Binario)](#instalacion-rapida-ejecutable-binario)
+- [Instalacion desde Codigo Fuente](#instalacion-desde-codigo-fuente)
 - [Guia de Uso](#guia-de-uso)
   - [Interfaz Grafica TUI (OpenTUI)](#interfaz-grafica-tui-opentui)
   - [Cartelera de Peliculas](#cartelera-de-peliculas)
   - [Sinopsis, Duracion y Horarios](#sinopsis-duracion-y-horarios)
   - [Ver Poster / Imagen en Terminal](#ver-poster--imagen-en-terminal)
+  - [Reproducir Trailer en Terminal](#reproducir-trailer-en-terminal)
   - [Salas Especiales 4DX y VIP](#salas-especiales-4dx-y-vip)
   - [Generar Resumen para Compartir (WhatsApp / Discord)](#generar-resumen-para-compartir-whatsapp--discord)
-  - [Abrir Trailer Oficial](#abrir-trailer-oficial)
   - [Cines y Salas por Ciudad](#cines-y-salas-por-ciudad)
   - [Funciones de un Cine Especifico](#funciones-de-un-cine-especifico)
   - [Ciudades Disponibles](#ciudades-disponibles)
@@ -43,7 +44,27 @@
 
 ---
 
-## Instalacion
+## Instalacion Rapida (Ejecutable Binario)
+
+Puedes descargar directamente el binario ejecutable para Linux sin necesidad de instalar Node.js o Bun:
+
+```bash
+# Descargar el ultimo binario desde GitHub Releases
+curl -sSL https://github.com/italovisconti/cinex-cli/releases/latest/download/cinex -o cinex
+
+# Dar permisos de ejecucion
+chmod +x cinex
+
+# Mover a tu carpeta de binarios (opcional)
+sudo mv cinex /usr/local/bin/
+
+# Ejecutar
+cinex
+```
+
+---
+
+## Instalacion desde Codigo Fuente
 
 ```bash
 # Clonar el repositorio
@@ -135,6 +156,22 @@ cinex poster "Scary Movie 6" --open
 
 ---
 
+### Reproducir Trailer en Terminal
+Descarga el trailer completo de la pelicula con barra de progreso en vivo y lo reproduce como video animado ANSI dentro de la terminal (requiere `yt-dlp` opcional).
+
+```bash
+# Descargar y reproducir trailer en la terminal
+cinex trailer Spiderman
+
+# Conservar el video descargado sin preguntar si desea eliminarlo
+cinex trailer Spiderman --keep
+
+# Abrir enlace de YouTube en el navegador web
+cinex trailer Spiderman --open
+```
+
+---
+
 ### Salas Especiales 4DX y VIP
 Filtra al instante unicamente las funciones y cines con salas especiales 4DX (movimiento y efectos) o VIP.
 
@@ -157,15 +194,6 @@ cinex compartir Spiderman
 
 # Generar resumen filtrando un cine especifico
 cinex compartir Spiderman Tolon
-```
-
----
-
-### Abrir Trailer Oficial
-Abre el trailer oficial en YouTube de la pelicula directamente en tu navegador.
-
-```bash
-cinex trailer "Spiderman"
 ```
 
 ---
