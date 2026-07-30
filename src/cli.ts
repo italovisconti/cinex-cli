@@ -62,7 +62,7 @@ export async function runCLI(args: string[]) {
       });
 
       console.log(pc.gray("\nTip: ") + pc.green("cinex show <titulo>") + pc.gray(" para ver sinopsis, poster y horarios."));
-      console.log(pc.gray("     ") + pc.green("cinex trailer <titulo> --terminal") + pc.gray(" para reproducir el trailer en la terminal."));
+      console.log(pc.gray("     ") + pc.green("cinex trailer <titulo>") + pc.gray(" para reproducir el trailer en la terminal."));
       console.log(pc.gray("     ") + pc.green("cinex tui") + pc.gray(" para la interfaz grafica interactiva.\n"));
     });
 
@@ -129,10 +129,9 @@ export async function runCLI(args: string[]) {
   program
     .command("trailer <pelicula>")
     .alias("video")
-    .description("Reproducir el trailer de la pelicula en la terminal o navegador")
-    .option("-t, --terminal", "Reproducir video en formato ANSI dentro de la terminal", true)
-    .option("-o, --open", "Abrir enlace de YouTube en el navegador web")
-    .option("-s, --seconds <segundos>", "Duracion del clip de trailer en segundos", "6")
+    .description("Reproducir el trailer completo de la pelicula en la terminal (requiere yt-dlp)")
+    .option("-o, --open", "Abrir enlace de YouTube directamente en el navegador web")
+    .option("-k, --keep", "Conservar el archivo de video descargado en /tmp sin preguntar")
     .action(async (pelicula, options) => {
       const spinner = startCliSpinner(`Buscando trailer para "${pelicula}"...`);
       const movies = await fetchAllMovies();
@@ -151,9 +150,7 @@ export async function runCLI(args: string[]) {
         return;
       }
 
-      // Play video in terminal
-      const secondsNum = parseInt(options.seconds) || 6;
-      await playTrailerInTerminal(movie.youtubeUrl, secondsNum);
+      await playTrailerInTerminal(movie.title, movie.youtubeUrl, { keep: options.keep });
     });
 
   program
