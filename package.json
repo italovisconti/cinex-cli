@@ -1,13 +1,22 @@
 {
   "name": "cinex-cli",
+  "version": "1.0.0",
+  "description": "CLI y TUI para Cinex Venezuela: cartelera, sinopsis, duración, horarios, cines y salas.",
   "module": "src/index.tsx",
   "type": "module",
+  "bin": {
+    "cinex": "./src/index.tsx"
+  },
   "private": true,
   "scripts": {
+    "start": "bun run src/index.tsx",
+    "tui": "bun run src/index.tsx tui",
+    "cartelera": "bun run src/index.tsx cartelera",
     "dev": "bun run --watch src/index.tsx"
   },
   "devDependencies": {
-    "@types/bun": "latest"
+    "@types/bun": "latest",
+    "@types/react": "^19.2.17"
   },
   "peerDependencies": {
     "typescript": "^5"
@@ -15,6 +24,10 @@
   "dependencies": {
     "@opentui/core": "^0.4.5",
     "@opentui/react": "^0.4.5",
-    "react": "^19.2.6"
+    "cheerio": "^1.2.0",
+    "commander": "^15.0.0",
+    "picocolors": "^1.1.1",
+    "react": "^19.2.6",
+    "terminal-image": "^5.0.1"
   }
 }
