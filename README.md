@@ -58,7 +58,7 @@ chmod +x cinex
 # Mover a tu carpeta de binarios (opcional)
 sudo mv cinex /usr/local/bin/
 
-# Ejecutar
+# Ejecutar la TUI directamente
 cinex
 ```
 
@@ -83,13 +83,16 @@ bun link
 ## Guia de Uso
 
 ### Interfaz Grafica TUI (OpenTUI)
-Inicia la experiencia visual interactiva en la terminal utilizando **OpenTUI React**:
+Inicia la experiencia visual interactiva en la terminal utilizando **OpenTUI React**. Puedes ejecutar directamente `cinex` o `cinex tui`:
 
 ```bash
-# Iniciar TUI
+# Iniciar TUI directamente (modo por defecto)
+cinex
+
+# O explícitamente
 cinex tui
 
-# O alternativamente
+# O con Bun desde fuente
 bun run tui
 ```
 
