@@ -2,6 +2,7 @@ import { Command } from "commander";
 import pc from "picocolors";
 import { fetchAllMovies, fetchCities, extractAllCinemas, normalizeStr, generateShareText } from "./api";
 import { renderPosterInTerminal, openPosterInBrowser } from "./image";
+import { playTrailerInTerminal } from "./video";
 import { getGlyphs } from "./glyphs";
 import { startCliSpinner } from "./spinner";
 import { renderTUI } from "./tui";
@@ -61,6 +62,7 @@ export async function runCLI(args: string[]) {
       });
 
       console.log(pc.gray("\nTip: ") + pc.green("cinex show <titulo>") + pc.gray(" para ver sinopsis, poster y horarios."));
+      console.log(pc.gray("     ") + pc.green("cinex trailer <titulo> --terminal") + pc.gray(" para reproducir el trailer en la terminal."));
       console.log(pc.gray("     ") + pc.green("cinex tui") + pc.gray(" para la interfaz grafica interactiva.\n"));
     });
 
@@ -122,6 +124,36 @@ export async function runCLI(args: string[]) {
         }
       });
       console.log("\n");
+    });
+
+  program
+    .command("trailer <pelicula>")
+    .alias("video")
+    .description("Reproducir el trailer de la pelicula en la terminal o navegador")
+    .option("-t, --terminal", "Reproducir video en formato ANSI dentro de la terminal", true)
+    .option("-o, --open", "Abrir enlace de YouTube en el navegador web")
+    .option("-s, --seconds <segundos>", "Duracion del clip de trailer en segundos", "6")
+    .action(async (pelicula, options) => {
+      const spinner = startCliSpinner(`Buscando trailer para "${pelicula}"...`);
+      const movies = await fetchAllMovies();
+      const q = normalizeStr(pelicula);
+      const movie = movies.find(m => normalizeStr(m.title).includes(q));
+      spinner.stop();
+
+      if (!movie || !movie.youtubeUrl) {
+        console.log(pc.red(`[X] No se encontro trailer para "${pelicula}".`));
+        return;
+      }
+
+      if (options.open) {
+        console.log(pc.green(`[+] Abriendo trailer oficial en YouTube: ${movie.youtubeUrl}`));
+        openPosterInBrowser(movie.youtubeUrl);
+        return;
+      }
+
+      // Play video in terminal
+      const secondsNum = parseInt(options.seconds) || 6;
+      await playTrailerInTerminal(movie.youtubeUrl, secondsNum);
     });
 
   program
@@ -194,26 +226,6 @@ export async function runCLI(args: string[]) {
       console.log(pc.white(shareText));
       console.log(pc.gray("─".repeat(60)));
       console.log("");
-    });
-
-  program
-    .command("trailer <pelicula>")
-    .alias("video")
-    .description("Abrir el trailer oficial en YouTube de la pelicula")
-    .action(async (pelicula) => {
-      const spinner = startCliSpinner(`Buscando trailer para "${pelicula}"...`);
-      const movies = await fetchAllMovies();
-      const q = normalizeStr(pelicula);
-      const movie = movies.find(m => normalizeStr(m.title).includes(q));
-      spinner.stop();
-
-      if (!movie || !movie.youtubeUrl) {
-        console.log(pc.red(`[X] No se encontro trailer para "${pelicula}".`));
-        return;
-      }
-
-      console.log(pc.green(`[+] Abriendo trailer oficial en YouTube: ${movie.youtubeUrl}`));
-      openPosterInBrowser(movie.youtubeUrl);
     });
 
   program
