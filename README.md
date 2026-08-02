@@ -26,6 +26,9 @@
 ## Indice
 
 - [Instalacion Rapida (Ejecutable Binario)](#instalacion-rapida-ejecutable-binario)
+  - [Linux](#linux)
+  - [macOS](#macos)
+  - [Windows](#windows)
 - [Instalacion desde Codigo Fuente](#instalacion-desde-codigo-fuente)
 - [Guia de Uso](#guia-de-uso)
   - [Interfaz Grafica TUI (OpenTUI)](#interfaz-grafica-tui-opentui)
@@ -39,6 +42,9 @@
   - [Funciones de un Cine Especifico](#funciones-de-un-cine-especifico)
   - [Ciudades Disponibles](#ciudades-disponibles)
 - [Fallback de Fuentes (Nerd Fonts vs ASCII)](#fallback-de-fuentes-nerd-fonts-vs-ascii)
+- [Requisitos Opcionales y Terminales Recomendadas](#requisitos-opcionales-y-terminales-recomendadas)
+  - [1. Reproduccion de Trailers (yt-dlp, timg, mpv)](#1-reproduccion-de-trailers-yt-dlp-timg-mpv)
+  - [2. Visualizacion de Posters y Graficos Terminal](#2-visualizacion-de-posters-y-graficos-terminal)
 - [Tecnologias](#tecnologias)
 - [Licencia](#licencia)
 
@@ -46,36 +52,97 @@
 
 ## Instalacion Rapida (Ejecutable Binario)
 
-Puedes descargar directamente el binario ejecutable para Linux sin necesidad de instalar Node.js o Bun:
+Puedes descargar directamente el binario ejecutable precompilado para tu sistema operativo sin necesidad de instalar Node.js o Bun:
+
+### Linux
 
 ```bash
-# Descargar el ultimo binario desde GitHub Releases
-curl -sSL https://github.com/italovisconti/cinex-cli/releases/latest/download/cinex -o cinex
+# Descargar el ejecutable para Linux (x64)
+curl -sSL https://github.com/italovisconti/cinex-cli/releases/latest/download/cinex-linux-x64 -o cinex
 
 # Dar permisos de ejecucion
 chmod +x cinex
 
-# Mover a tu carpeta de binarios (opcional)
+# Mover a tu carpeta de binarios del sistema (opcional)
 sudo mv cinex /usr/local/bin/
 
-# Ejecutar la TUI directamente
+# Ejecutar
 cinex
 ```
+
+### macOS
+
+#### Apple Silicon (M1 / M2 / M3 / M4)
+```bash
+# Descargar el ejecutable para macOS ARM64
+curl -sSL https://github.com/italovisconti/cinex-cli/releases/latest/download/cinex-macos-arm64 -o cinex
+
+# Dar permisos de ejecucion
+chmod +x cinex
+
+# Mover a tu carpeta de binarios del sistema (opcional)
+sudo mv cinex /usr/local/bin/
+
+# Ejecutar
+cinex
+```
+
+#### Intel
+```bash
+# Descargar el ejecutable para macOS x64
+curl -sSL https://github.com/italovisconti/cinex-cli/releases/latest/download/cinex-macos-x64 -o cinex
+
+# Dar permisos de ejecucion
+chmod +x cinex
+
+# Mover a tu carpeta de binarios del sistema (opcional)
+sudo mv cinex /usr/local/bin/
+
+# Ejecutar
+cinex
+```
+
+### Windows
+
+#### Desde PowerShell:
+```powershell
+# Descargar el ejecutable para Windows (x64)
+Invoke-WebRequest -Uri "https://github.com/italovisconti/cinex-cli/releases/latest/download/cinex-windows-x64.exe" -OutFile "cinex.exe"
+
+# Ejecutar la aplicacion
+.\cinex.exe
+```
+
+#### Desde Command Prompt (cmd) o Git Bash:
+```cmd
+curl -sSL https://github.com/italovisconti/cinex-cli/releases/latest/download/cinex-windows-x64.exe -o cinex.exe
+cinex.exe
+```
+
+> **Nota para Windows**: Puedes mover `cinex.exe` a una carpeta incluida en tu `PATH` de sistema (por ejemplo `C:\Windows` o `C:\Users\<TuUsuario>\AppData\Local\Microsoft\WindowsApps`) para poder ejecutar `cinex` desde cualquier terminal.
 
 ---
 
 ## Instalacion desde Codigo Fuente
 
+Si prefieres ejecutar o modificar el proyecto desde su codigo fuente en **Linux**, **macOS** o **Windows**:
+
+1. Requisito previo: Tener instalado [Bun](https://bun.sh) (o Node.js v18+).
+
+2. Clonar e instalar:
 ```bash
 # Clonar el repositorio
 git clone https://github.com/italovisconti/cinex-cli.git
 cd cinex-cli
 
-# Instalar dependencias con Bun
+# Instalar dependencias
 bun install
 
 # Crear enlace ejecutable global (opcional)
 bun link
+
+# Ejecutar la TUI
+bun run tui
 ```
 
 ---
@@ -101,6 +168,7 @@ bun run tui
 - `[↑]` / `[↓]` o `[k]` / `[j]`: Navegar por la lista.
 - `[Enter]`: Abrir modal con la sinopsis completa, formatos, trailer y horarios en todas las salas.
 - `[p]`: Renderizar el poster oficial en pantalla completa DENTRO de la terminal.
+- `[t]`: Descargar y reproducir el trailer oficial en la terminal (usando yt-dlp / timg / navegador).
 - `[/]`: Filtrar o buscar por texto en tiempo real.
 - `[r]`: Recargar datos en tiempo real desde Cinex Venezuela.
 - `[Esc]`: Cerrar modal o limpiar filtro de busqueda.
@@ -237,6 +305,44 @@ Muestra la lista de ciudades venezolanas donde Cinex tiene salas disponibles.
 ```bash
 cinex ciudades
 ```
+
+---
+
+## Requisitos Opcionales y Terminales Recomendadas
+
+`cinex-cli` funciona directamente en cualquier terminal estándar (Linux, macOS, Windows). Sin embargo, para disfrutar de la experiencia visual completa (posters en alta resolución y reproducción de trailers dentro de la terminal), te recomendamos instalar las siguientes herramientas opcionales:
+
+### 1. Reproducción de Trailers (`yt-dlp`, `timg`, `mpv`)
+
+- **`yt-dlp`** *(Recomendado)*: Herramienta CLI para la descarga fluida de trailers desde YouTube.
+  - **Linux / macOS**:
+    ```bash
+    mkdir -p ~/.local/bin && curl -sSL https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp -o ~/.local/bin/yt-dlp && chmod +x ~/.local/bin/yt-dlp
+    ```
+    *O mediante gestor de paquetes:*
+    ```bash
+    brew install yt-dlp    # macOS
+    pip install yt-dlp     # Linux / Windows
+    ```
+  - *Si `yt-dlp` no está presente, `cinex-cli` abrirá automáticamente el trailer en tu navegador web.*
+
+- **`timg`** o **`mpv`**: Renderizador multimedia para reproducciones de video en gráficos terminal.
+  - **macOS**: `brew install timg`
+  - **Linux (Ubuntu/Debian)**: `sudo apt install timg mpv`
+  - **Arch Linux**: `sudo pacman -S timg mpv`
+
+---
+
+### 2. Visualización de Posters y Gráficos Terminal
+
+Para renderizar posters e imágenes oficiales sin distorsión dentro de la terminal, se recomienda usar una **terminal moderna con soporte para colores TrueColor (24-bit)** o protocolos gráficos (Kitty / iTerm2 / Sixel):
+
+#### Terminales Recomendadas:
+- **macOS**: [iTerm2](https://iterm2.com/), [Kitty](https://sw.kovidgoyal.net/kitty/), [WezTerm](https://wezfurlong.org/wezterm/), Ghostty.
+- **Linux**: Kitty, WezTerm, Konsole, Alacritty, GNOME Terminal.
+- **Windows**: [Windows Terminal](https://github.com/microsoft/terminal) (usando PowerShell, Command Prompt o WSL2).
+
+> **Nota**: Si tu terminal no soporta gráficos nativos, `cinex-cli` utilizará automáticamente renderizado en bloques de color ANSI (TrueColor) o te permitirá abrir la imagen directamente en el navegador con la opción `--open` o el atajo `[o]` en la TUI.
 
 ---
 

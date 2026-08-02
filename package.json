@@ -12,7 +12,8 @@
     "start": "bun run src/index.tsx",
     "tui": "bun run src/index.tsx tui",
     "cartelera": "bun run src/index.tsx cartelera",
-    "dev": "bun run --watch src/index.tsx"
+    "dev": "bun run --watch src/index.tsx",
+    "build": "bun build --compile --minify ./src/index.tsx --outfile cinex"
   },
   "devDependencies": {
     "@types/bun": "latest",

@@ -3,13 +3,22 @@ import readline from "readline";
 import pc from "picocolors";
 import { openPosterInBrowser } from "./image";
 
-export function isYtDlpInstalled(): boolean {
+export function getYtDlpPath(): string | null {
+  const localBin = `${process.env.HOME || ""}/.local/bin/yt-dlp`;
+  try {
+    if (execSync(`test -x "${localBin}"`, { stdio: "pipe" })) return localBin;
+  } catch (_) {}
+
   try {
     const res = execSync("which yt-dlp", { stdio: "pipe" }).toString().trim();
-    return Boolean(res);
-  } catch (_) {
-    return false;
-  }
+    if (res) return res;
+  } catch (_) {}
+
+  return null;
+}
+
+export function isYtDlpInstalled(): boolean {
+  return getYtDlpPath() !== null;
 }
 
 export function isTimgInstalled(): boolean {
@@ -24,17 +33,19 @@ export function isTimgInstalled(): boolean {
 export async function playTrailerInTerminal(
   movieTitle: string,
   youtubeUrl: string,
-  options: { keep?: boolean } = {}
+  options: { keep?: boolean; tuiMode?: boolean } = {}
 ): Promise<void> {
   if (!youtubeUrl) {
     console.log(pc.red("[X] No hay enlace de trailer disponible para esta pelicula."));
     return;
   }
 
+  const ytDlpBin = getYtDlpPath();
+
   // Graceful check for yt-dlp
-  if (!isYtDlpInstalled()) {
+  if (!ytDlpBin) {
     console.log(pc.yellow("\n[!] Se requiere 'yt-dlp' para reproducir trailers directamente en la terminal."));
-    console.log(pc.gray("    Instalacion sugerida: ") + pc.white("brew install yt-dlp") + pc.gray("  o  ") + pc.white("pip install yt-dlp"));
+    console.log(pc.gray("    Instalacion sugerida: ") + pc.white("curl -sSL https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp -o ~/.local/bin/yt-dlp && chmod +x ~/.local/bin/yt-dlp"));
     console.log(pc.cyan(`\n[+] Abriendo trailer oficial en el navegador web: ${youtubeUrl}\n`));
     openPosterInBrowser(youtubeUrl);
     return;
@@ -43,11 +54,12 @@ export async function playTrailerInTerminal(
   const sanitizedTitle = movieTitle.toLowerCase().replace(/[^a-z0-9]/g, "_");
   const tmpVideo = `/tmp/cinex_trailer_${sanitizedTitle}.mp4`;
 
-  console.log(pc.cyan(`\n[+] Descargando trailer completo de "${movieTitle}" con yt-dlp...\n`));
+  console.log(pc.cyan(`\n[+] Descargando trailer completo de "${movieTitle}" con yt-dlp...`));
+  console.log(pc.gray(`    Presiona [Esc], [q] o [Ctrl+C] en cualquier momento para cancelar y volver.\n`));
 
   try {
     const dlArgs = [
-      "-f", "worst[ext=mp4]/worst",
+      "-f", "b/best[ext=mp4]/worst[ext=mp4]/worst/best",
       youtubeUrl,
       "-o", tmpVideo,
       "--playlist-items", "1",
@@ -56,7 +68,34 @@ export async function playTrailerInTerminal(
     ];
 
     await new Promise<void>((resolve, reject) => {
-      const child = spawn("yt-dlp", dlArgs, { stdio: ["ignore", "pipe", "pipe"] });
+      const child = spawn(ytDlpBin, dlArgs, { stdio: ["ignore", "pipe", "pipe"] });
+
+      let keyHandler: ((chunk: Buffer) => void) | null = null;
+      if (process.stdin.isTTY) {
+        try {
+          process.stdin.setRawMode(true);
+          process.stdin.resume();
+          keyHandler = (chunk: Buffer) => {
+            const str = chunk.toString();
+            if (str === "\u001b" || str === "q" || str === "Q" || str === "\u0003") {
+              child.kill("SIGINT");
+              try { execSync(`rm -f "${tmpVideo}"`); } catch (_) {}
+              reject(new Error("CANCELLED"));
+            }
+          };
+          process.stdin.on("data", keyHandler);
+        } catch (_) {}
+      }
+
+      const cleanupKeys = () => {
+        if (keyHandler && process.stdin.isTTY) {
+          try {
+            process.stdin.removeListener("data", keyHandler);
+            process.stdin.setRawMode(false);
+            process.stdin.pause();
+          } catch (_) {}
+        }
+      };
 
       child.stdout.on("data", (data: Buffer) => {
         const text = data.toString();
@@ -76,6 +115,7 @@ export async function playTrailerInTerminal(
       });
 
       child.on("close", (code) => {
+        cleanupKeys();
         if (code === 0) {
           process.stdout.write("\n\n");
           resolve();
@@ -84,15 +124,21 @@ export async function playTrailerInTerminal(
         }
       });
 
-      child.on("error", (err) => reject(err));
+      child.on("error", (err) => {
+        cleanupKeys();
+        reject(err);
+      });
     });
 
-    console.log(pc.bold(pc.green(`[✓] Descarga completa: ${tmpVideo}`)));
-    console.log(pc.bold(pc.cyan(`\n[▶] Reproduciendo trailer en la terminal...\n`)));
+    console.log(pc.bold(pc.green(`[✓] Descarga completa.`)));
+    console.log(pc.bold(pc.cyan(`\n[▶] Reproduciendo trailer en la terminal...`)));
+    console.log(pc.yellow(`[!] Presiona [q], [Esc] o [Ctrl+C] para salir de la reproduccion.\n`));
 
     // Play video with timg or mpv
     if (isTimgInstalled()) {
-      execSync(`timg -g 65x30 "${tmpVideo}"`, { stdio: "inherit" });
+      try {
+        execSync(`timg -g 65x30 "${tmpVideo}"`, { stdio: "inherit" });
+      } catch (_) {}
     } else {
       try {
         const isMpv = execSync("which mpv", { stdio: "pipe" }).toString().trim();
@@ -101,12 +147,18 @@ export async function playTrailerInTerminal(
         } else {
           console.log(pc.yellow("[!] Instala 'timg' para la mejor reproduccion de video en terminal."));
         }
-      } catch (_) {
-        console.log(pc.yellow("[!] Instala 'timg' para la mejor reproduccion de video en terminal."));
-      }
+      } catch (_) {}
     }
 
-    // Prompt user to delete or keep file
+    // Auto cleanup in tuiMode or if not keeping file
+    if (!options.keep) {
+      try { execSync(`rm -f "${tmpVideo}"`); } catch (_) {}
+    }
+
+    if (options.tuiMode) {
+      return;
+    }
+
     if (options.keep) {
       console.log(pc.gray(`\n[+] Archivo conservado en: ${tmpVideo}\n`));
       return;
@@ -137,9 +189,15 @@ export async function playTrailerInTerminal(
       });
     }
 
-  } catch (err) {
-    console.log(pc.red(`\n[X] No se pudo completar la descarga del trailer.`));
-    console.log(pc.cyan(`[+] Abriendo trailer oficial en el navegador web: ${youtubeUrl}\n`));
+  } catch (err: any) {
+    if (err?.message === "CANCELLED") {
+      console.log(pc.yellow(`\n[!] Descarga de trailer cancelada.`));
+      return;
+    }
+    console.log(pc.red(`\n[X] No se pudo completar la descarga del trailer con yt-dlp.`));
+    console.log(pc.yellow(`[!] Nota: Es posible que tu version de yt-dlp este desactualizada (YouTube cambia sus algoritmos con frecuencia).`));
+    console.log(pc.gray(`    Para actualizar yt-dlp a la ultima version ejecuta:\n    `) + pc.white(`mkdir -p ~/.local/bin && curl -sSL https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp -o ~/.local/bin/yt-dlp && chmod +x ~/.local/bin/yt-dlp`));
+    console.log(pc.cyan(`\n[+] Abriendo trailer oficial en el navegador web: ${youtubeUrl}\n`));
     openPosterInBrowser(youtubeUrl);
   }
 }

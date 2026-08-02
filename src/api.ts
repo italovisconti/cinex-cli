@@ -1,10 +1,54 @@
+import fs from "fs";
+import path from "path";
+import os from "os";
 import * as cheerio from "cheerio";
 import type { Movie, Showtime, TheaterShowtimes, Cinema, City } from "./types";
 
 const BASE_URL = "https://www.cinex.com.ve";
+const CACHE_TTL_MS = 30 * 60 * 1000; // 30 minutos
+const CACHE_FILE_PATH = path.join(os.tmpdir(), "cinex_cli_cartelera_cache.json");
 
-let cachedMovies: Movie[] | null = null;
-let cachedCities: City[] | null = null;
+interface PersistentCache {
+  timestamp: number;
+  movies: Movie[];
+  cities: City[];
+}
+
+let memoryMovies: Movie[] | null = null;
+let memoryCities: City[] | null = null;
+let memoryTimestamp: number = 0;
+
+function readCacheFromDisk(): PersistentCache | null {
+  try {
+    if (fs.existsSync(CACHE_FILE_PATH)) {
+      const raw = fs.readFileSync(CACHE_FILE_PATH, "utf-8");
+      const parsed = JSON.parse(raw) as PersistentCache;
+      if (parsed && typeof parsed.timestamp === "number" && Array.isArray(parsed.movies)) {
+        return parsed;
+      }
+    }
+  } catch (_) {}
+  return null;
+}
+
+function writeCacheToDisk(movies: Movie[], cities: City[]) {
+  try {
+    const data: PersistentCache = {
+      timestamp: Date.now(),
+      movies,
+      cities
+    };
+    fs.writeFileSync(CACHE_FILE_PATH, JSON.stringify(data), "utf-8");
+  } catch (_) {}
+}
+
+export function getCacheInfo(): { isCached: boolean; ageMinutes: number } {
+  const disk = readCacheFromDisk();
+  const ts = memoryTimestamp || (disk ? disk.timestamp : 0);
+  if (!ts) return { isCached: false, ageMinutes: 0 };
+  const ageMinutes = Math.floor((Date.now() - ts) / 60000);
+  return { isCached: ageMinutes < 30, ageMinutes };
+}
 
 export function normalizeStr(str: string): string {
   return str
@@ -14,14 +58,23 @@ export function normalizeStr(str: string): string {
     .trim();
 }
 
-export async function fetchCities(): Promise<City[]> {
-  if (cachedCities) return cachedCities;
+export async function fetchCities(forceRefresh = false): Promise<City[]> {
+  if (!forceRefresh && memoryCities) return memoryCities;
+
+  if (!forceRefresh) {
+    const disk = readCacheFromDisk();
+    if (disk && (Date.now() - disk.timestamp < CACHE_TTL_MS)) {
+      memoryCities = disk.cities;
+      return memoryCities;
+    }
+  }
+
   try {
     const res = await fetch(`${BASE_URL}/assets/php/datasource.php?method=getcinemacitieslist`);
     const json = (await res.json()) as { result?: string; data?: { cinema_city: string }[] };
     if (json && json.data && Array.isArray(json.data)) {
-      cachedCities = json.data.map((c: { cinema_city: string }) => ({ name: c.cinema_city.toUpperCase() }));
-      return cachedCities;
+      memoryCities = json.data.map((c: { cinema_city: string }) => ({ name: c.cinema_city.toUpperCase() }));
+      return memoryCities;
     }
   } catch (err) {
     console.error("Error fetching cities:", err);
@@ -204,7 +257,21 @@ export async function fetchMovieDetail(sinopsisFilename: string, basicMovie: any
 }
 
 export async function fetchAllMovies(forceRefresh = false): Promise<Movie[]> {
-  if (cachedMovies && !forceRefresh) return cachedMovies;
+  const now = Date.now();
+
+  if (!forceRefresh && memoryMovies && (now - memoryTimestamp < CACHE_TTL_MS)) {
+    return memoryMovies;
+  }
+
+  if (!forceRefresh) {
+    const disk = readCacheFromDisk();
+    if (disk && (now - disk.timestamp < CACHE_TTL_MS)) {
+      memoryMovies = disk.movies;
+      memoryCities = disk.cities;
+      memoryTimestamp = disk.timestamp;
+      return memoryMovies;
+    }
+  }
 
   const rawList = await fetchRawCartelera();
   const sinopsisMap = await getSinopsisLinksMap();
@@ -232,7 +299,14 @@ export async function fetchAllMovies(forceRefresh = false): Promise<Movie[]> {
     movies.push(movie);
   }
 
-  cachedMovies = movies;
+  const cities = await fetchCities(forceRefresh);
+
+  memoryMovies = movies;
+  memoryCities = cities;
+  memoryTimestamp = Date.now();
+
+  writeCacheToDisk(movies, cities);
+
   return movies;
 }
 

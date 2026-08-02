@@ -44,6 +44,53 @@ export async function renderPosterInTerminal(posterUrl: string, width = 40): Pro
   return "[Error al procesar la imagen]";
 }
 
+function clearPosterScreen() {
+  // Kitty images live outside the terminal character grid, so erase them explicitly.
+  process.stdout.write("\x1b_Ga=d,d=A\x1b\\\x1b[2J\x1b[H");
+}
+
+async function waitForPosterDismissal(): Promise<void> {
+  if (!process.stdin.isTTY) return;
+
+  const wasRaw = process.stdin.isRaw;
+  if (!wasRaw) process.stdin.setRawMode(true);
+  process.stdin.resume();
+
+  await new Promise<void>((resolve) => {
+    const onData = (chunk: Buffer) => {
+      const key = chunk.toString();
+      if (key.includes("\u001b") || key.toLowerCase().includes("q")) {
+        process.stdin.removeListener("data", onData);
+        resolve();
+      }
+    };
+    process.stdin.on("data", onData);
+  });
+
+  if (!wasRaw) process.stdin.setRawMode(false);
+  process.stdin.pause();
+}
+
+export async function showPosterInTerminal(title: string, posterUrl: string): Promise<void> {
+  clearPosterScreen();
+  process.stdout.write(`POSTER: ${title}\n\n`);
+
+  try {
+    const width = Math.max(30, Math.min((process.stdout.columns || 80) - 10, 50));
+    const art = await renderPosterInTerminal(posterUrl, width);
+    if (art) process.stdout.write(`${art}\n`);
+  } catch (err) {
+    process.stdout.write(`[Error al renderizar el poster: ${String(err)}]\n`);
+  }
+
+  process.stdout.write("\n[Esc] o [q] para volver al TUI\n");
+  try {
+    await waitForPosterDismissal();
+  } finally {
+    clearPosterScreen();
+  }
+}
+
 export function openPosterInBrowser(url: string) {
   if (!url) return;
   try {

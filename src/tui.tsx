@@ -1,8 +1,9 @@
-import React, { useState, useEffect } from "react";
-import { createCliRenderer } from "@opentui/core";
+import React, { useState, useEffect, useRef } from "react";
+import { createCliRenderer, type ScrollBoxRenderable } from "@opentui/core";
 import { createRoot, useKeyboard, useRenderer, useTerminalDimensions } from "@opentui/react";
-import { fetchAllMovies, extractAllCinemas, fetchCities } from "./api";
-import { renderPosterInTerminal } from "./image";
+import { fetchAllMovies, extractAllCinemas, fetchCities, getCacheInfo } from "./api";
+import { showPosterInTerminal, openPosterInBrowser } from "./image";
+import { playTrailerInTerminal } from "./video";
 import { getGlyphs } from "./glyphs";
 import { getSpinnerFrames } from "./spinner";
 import type { Movie, Cinema, City, Showtime, TheaterShowtimes } from "./types";
@@ -27,20 +28,19 @@ function CinexApp() {
   const [isSearching, setIsSearching] = useState(false);
 
   const [detailModalMovie, setDetailModalMovie] = useState<Movie | null>(null);
-  const [showPosterView, setShowPosterView] = useState(false);
-  const [posterArt, setPosterArt] = useState<string>("");
-  const [loadingPoster, setLoadingPoster] = useState(false);
+  const [modalScrollTop, setModalScrollTop] = useState(0);
+  const theatersScrollRef = useRef<ScrollBoxRenderable>(null);
 
   const [spinnerIdx, setSpinnerIdx] = useState(0);
 
   // Animated loader timer
   useEffect(() => {
-    if (!loading && !loadingPoster) return;
+    if (!loading) return;
     const timer = setInterval(() => {
       setSpinnerIdx((prev) => (prev + 1) % spinnerFrames.length);
     }, 80);
     return () => clearInterval(timer);
-  }, [loading, loadingPoster, spinnerFrames.length]);
+  }, [loading, spinnerFrames.length]);
 
   const loadData = async (force = false) => {
     setLoading(true);
@@ -63,6 +63,10 @@ function CinexApp() {
     loadData();
   }, []);
 
+  useEffect(() => {
+    theatersScrollRef.current?.scrollTo({ x: 0, y: modalScrollTop });
+  }, [modalScrollTop, detailModalMovie]);
+
   const filteredMovies = movies.filter((m: Movie) => {
     const matchesSearch = !searchQuery || m.title.toLowerCase().includes(searchQuery.toLowerCase()) || m.genre.toLowerCase().includes(searchQuery.toLowerCase());
     const matchesCity = selectedCity === "TODAS" || m.theaters.some((t: TheaterShowtimes) => t.city?.toUpperCase() === selectedCity.toUpperCase());
@@ -78,23 +82,20 @@ function CinexApp() {
   const currentListLength = activeTab === "movies" ? filteredMovies.length : activeTab === "cinemas" ? filteredCinemas.length : cities.length;
   const currentMovie = activeTab === "movies" ? filteredMovies[selectedIndex] : null;
 
-  const openTerminalPoster = async (movie: Movie) => {
+  const openTerminalPoster = (movie: Movie) => {
     if (!movie || !movie.posterUrl) return;
-    setShowPosterView(true);
-    setLoadingPoster(true);
-    try {
-      const targetWidth = Math.max(30, Math.min(columns - 10, 50));
-      const art = await renderPosterInTerminal(movie.posterUrl, targetWidth);
-      setPosterArt(art);
-    } catch (e) {
-      setPosterArt("[Error al renderizar el poster]");
-    } finally {
-      setLoadingPoster(false);
-    }
+    renderer.destroy();
+    void (async () => {
+      try {
+        await showPosterInTerminal(movie.title, movie.posterUrl);
+      } finally {
+        await renderTUI();
+      }
+    })();
   };
 
   useKeyboard((event: { name: string }) => {
-    if (event.name === "q" && !isSearching && !detailModalMovie && !showPosterView) {
+    if (event.name === "q" && !isSearching && !detailModalMovie) {
       renderer.destroy();
       process.exit(0);
       return;
@@ -106,10 +107,6 @@ function CinexApp() {
     }
 
     if (event.name === "p") {
-      if (showPosterView) {
-        setShowPosterView(false);
-        return;
-      }
       const targetMovie = detailModalMovie || currentMovie;
       if (targetMovie) {
         openTerminalPoster(targetMovie);
@@ -117,13 +114,30 @@ function CinexApp() {
       return;
     }
 
-    if (event.name === "escape") {
-      if (showPosterView) {
-        setShowPosterView(false);
-        return;
+    if (event.name === "t" && !isSearching) {
+      const targetMovie = detailModalMovie || currentMovie;
+      if (targetMovie && targetMovie.youtubeUrl) {
+        renderer.destroy();
+        (async () => {
+          await playTrailerInTerminal(targetMovie.title, targetMovie.youtubeUrl, { tuiMode: true });
+          await renderTUI();
+        })();
       }
+      return;
+    }
+
+    if (event.name === "o" && !isSearching) {
+      const targetMovie = detailModalMovie || currentMovie;
+      if (targetMovie && targetMovie.youtubeUrl) {
+        openPosterInBrowser(targetMovie.youtubeUrl);
+      }
+      return;
+    }
+
+    if (event.name === "escape") {
       if (detailModalMovie) {
         setDetailModalMovie(null);
+        setModalScrollTop(0);
         return;
       }
       if (isSearching) {
@@ -147,18 +161,41 @@ function CinexApp() {
     if (event.name === "/") { setIsSearching(true); return; }
 
     if (event.name === "up" || event.name === "k") {
-      setSelectedIndex((prev: number) => Math.max(0, prev - 1));
+      if (detailModalMovie) {
+        setModalScrollTop((prev: number) => Math.max(0, prev - 2));
+      } else {
+        setSelectedIndex((prev: number) => Math.max(0, prev - 1));
+      }
       return;
     }
 
     if (event.name === "down" || event.name === "j") {
-      setSelectedIndex((prev: number) => Math.min(currentListLength - 1, prev + 1));
+      if (detailModalMovie) {
+        setModalScrollTop((prev: number) => prev + 2);
+      } else {
+        setSelectedIndex((prev: number) => Math.min(currentListLength - 1, prev + 1));
+      }
+      return;
+    }
+
+    if (event.name === "pageup") {
+      if (detailModalMovie) {
+        setModalScrollTop((prev: number) => Math.max(0, prev - 8));
+      }
+      return;
+    }
+
+    if (event.name === "pagedown") {
+      if (detailModalMovie) {
+        setModalScrollTop((prev: number) => prev + 8);
+      }
       return;
     }
 
     if (event.name === "return" || event.name === "enter") {
       if (activeTab === "movies" && filteredMovies[selectedIndex]) {
         setDetailModalMovie(filteredMovies[selectedIndex]);
+        setModalScrollTop(0);
       } else if (activeTab === "cities" && cities[selectedIndex]) {
         setSelectedCity(cities[selectedIndex].name);
         setActiveTab("movies");
@@ -167,82 +204,92 @@ function CinexApp() {
     }
   });
 
-  // Render Full Terminal Poster View Modal inside TUI!
-  if (showPosterView && (detailModalMovie || currentMovie)) {
-    const movie = detailModalMovie || currentMovie!;
-    const currentSpinnerFrame = spinnerFrames[spinnerIdx];
-    return (
-      <box width={columns} height={rows} flexDirection="column" padding={1} border style={{ borderColor: "magenta" }}>
-        <box border padding={1} marginBottom={1} style={{ borderColor: "yellow" }}>
-          <text fg="yellow">
-            <strong>{NF.image} POSTER DE LA PELICULA: {movie.title.toUpperCase()}</strong>
-          </text>
-        </box>
-
-        <box flexGrow={1} justifyContent="center" alignItems="center" flexDirection="column">
-          {loadingPoster ? (
-            <text fg="cyan"><strong>{currentSpinnerFrame} Renderizando poster en la terminal...</strong></text>
-          ) : (
-            <scrollbox height={rows - 8}>
-              <text fg="white">{posterArt}</text>
-            </scrollbox>
-          )}
-        </box>
-
-        <box marginTop={1} style={{ backgroundColor: "blue" }} padding={1}>
-          <text fg="white"><strong> Presiona [Esc], [p] o [q] para regresar a los detalles</strong></text>
-        </box>
-      </box>
-    );
-  }
-
   // Render Full Screen Movie Detail Modal
   if (detailModalMovie) {
+    const synopsisHeight = Math.max(3, Math.min(8, rows - 12));
+
     return (
-      <box width={columns} height={rows} flexDirection="column" padding={1} border style={{ borderColor: "cyan" }}>
-        <box border padding={1} marginBottom={1} style={{ borderColor: "yellow" }}>
-          <text fg="yellow">
-            <strong>{NF.film} {detailModalMovie.title.toUpperCase()}</strong>
-          </text>
-          <text fg="gray"> | {NF.clock} {detailModalMovie.durationMinutes} min | Censura: {detailModalMovie.censorship} | Genero: {detailModalMovie.genre}</text>
+      // A distinct key prevents the main view's layout nodes from being reused by the modal.
+      <box key="movie-detail" width={columns} height={rows} flexDirection="column" padding={0} border overflow="hidden" style={{ borderColor: "cyan" }}>
+        {/* Header */}
+        <box height={3} flexShrink={0} border paddingX={1} marginBottom={0} flexDirection="row" justifyContent="space-between" alignItems="center" style={{ borderColor: "yellow" }}>
+          <box flexDirection="row">
+            <text fg="yellow">
+              <strong>{NF.film} {detailModalMovie.title.toUpperCase()}</strong>
+            </text>
+          </box>
+          <box flexDirection="row">
+            <text fg="gray">
+              {NF.clock} {detailModalMovie.durationMinutes} min  |  Censura: {detailModalMovie.censorship}  |  Genero: {detailModalMovie.genre}
+            </text>
+          </box>
         </box>
 
-        <box flexDirection="row" flexGrow={1}>
-          <box width="45%" flexDirection="column" paddingRight={1} border style={{ borderColor: "gray" }}>
+        {/* Middle Body */}
+        <box height={0} flexDirection="row" flexGrow={1} overflow="hidden">
+          {/* Left Column */}
+          <box width="45%" flexDirection="column" paddingX={1} border style={{ borderColor: "gray" }}>
             <text fg="cyan"><strong>[SINOPSIS]</strong></text>
-            <scrollbox height={8} marginBottom={1}>
+            <scrollbox height={synopsisHeight} marginBottom={1}>
               <text fg="white">{detailModalMovie.synopsis}</text>
             </scrollbox>
 
-            <text fg="cyan"><strong>[FORMATOS]</strong></text>
-            <text fg="magenta">{detailModalMovie.formats.join("  •  ")}</text>
+            <text fg="cyan"><strong>[FORMATOS DISPONIBLES]</strong></text>
+            <box flexDirection="row" flexWrap="wrap" marginY={1}>
+              {detailModalMovie.formats.map((fmt: string, fIdx: number) => {
+                let fmtColor = "white";
+                if (fmt.includes("4DX")) fmtColor = "magenta";
+                else if (fmt.includes("VIP")) fmtColor = "yellow";
+                else if (fmt.includes("3D")) fmtColor = "cyan";
+                else if (fmt.includes("DIG")) fmtColor = "green";
+                return (
+                  <box key={fIdx} marginRight={1} marginBottom={1}>
+                    <text fg={fmtColor}><strong>[{fmt}]</strong></text>
+                  </box>
+                );
+              })}
+            </box>
 
             <box marginTop={1} flexDirection="column">
-              <text fg="yellow"><strong>{NF.image} Presiona [p] para ver el poster en la terminal!</strong></text>
+              <text fg="yellow"><strong>{NF.image} Presiona [p] poster | [t] {NF.play} trailer | [o] web</strong></text>
               {detailModalMovie.youtubeUrl && (
-                <text fg="blue">{NF.play} Trailer YouTube: {detailModalMovie.youtubeUrl}</text>
+                <text fg="blue">{NF.play} YouTube: {detailModalMovie.youtubeUrl}</text>
               )}
             </box>
           </box>
 
-          <box width="55%" flexDirection="column" paddingLeft={1} border style={{ borderColor: "gray" }}>
-            <text fg="green"><strong>{NF.ticket} CINES Y HORARIOS ({detailModalMovie.theaters.length} salas):</strong></text>
-            <scrollbox height={rows - 10}>
+          {/* Right Column (With Scroller & Colored Badges) */}
+          <box width="55%" flexDirection="column" paddingX={1} border style={{ borderColor: "gray" }}>
+            <box flexDirection="row" justifyContent="space-between">
+              <text fg="green"><strong>{NF.ticket} CINES Y HORARIOS ({detailModalMovie.theaters.length} salas):</strong></text>
+              <text fg="gray"><strong>[↑/↓ Scroll]</strong></text>
+            </box>
+
+            <scrollbox ref={theatersScrollRef} flexGrow={1}>
               {detailModalMovie.theaters.map((t: TheaterShowtimes, idx: number) => (
-                <box key={idx} flexDirection="column" marginBottom={1}>
+                <box key={idx} flexDirection="column" marginBottom={1} border style={{ borderColor: "gray" }} paddingX={1}>
                   <text fg="yellow"><strong>{NF.theater} {t.cinemaName} ({t.city || "VE"})</strong></text>
-                  <text fg="gray">{t.address.slice(0, 50)}</text>
+                  <text fg="gray">{t.address.slice(0, 55)}</text>
                   <box flexDirection="row" flexWrap="wrap" marginTop={1}>
                     {t.showtimes.length === 0 ? (
                       <text fg="gray">Sin funciones programadas hoy</text>
                     ) : (
-                      t.showtimes.map((st: Showtime, sIdx: number) => (
-                        <box key={sIdx} marginRight={1} marginBottom={1}>
-                          <text fg={st.isPassed ? "gray" : "green"}>
-                            [{st.time} {st.room} {st.lang}]
-                          </text>
-                        </box>
-                      ))
+                      t.showtimes.map((st: Showtime, sIdx: number) => {
+                        let badgeColor = st.isPassed ? "gray" : "green";
+                        if (!st.isPassed) {
+                          if (st.room.includes("4DX")) badgeColor = "magenta";
+                          else if (st.room.includes("VIP")) badgeColor = "yellow";
+                          else if (st.lang.includes("SUB")) badgeColor = "cyan";
+                        }
+                        const cleanLang = st.lang && st.lang !== "N/A" ? ` ${st.lang}` : "";
+                        return (
+                          <box key={sIdx} marginRight={1} marginBottom={1}>
+                            <text fg={badgeColor}>
+                              <strong>[{st.time} {st.room}{cleanLang}]</strong>
+                            </text>
+                          </box>
+                        );
+                      })
                     )}
                   </box>
                 </box>
@@ -251,8 +298,9 @@ function CinexApp() {
           </box>
         </box>
 
-        <box marginTop={1} style={{ backgroundColor: "blue" }} padding={1}>
-          <text fg="white"><strong> Presiona [Esc] o [q] para volver | [p] {NF.image} Ver Poster en Terminal</strong></text>
+        {/* Footer Bar */}
+        <box flexShrink={0} paddingX={1} style={{ backgroundColor: "blue" }}>
+          <text fg="white"><strong> Presiona [Esc] Volver | [↑/↓] Navegar salas | [p] Poster | [t] Trailer | [o] Abrir Web</strong></text>
         </box>
       </box>
     );
@@ -261,15 +309,21 @@ function CinexApp() {
   const activeMovie = activeTab === "movies" ? filteredMovies[selectedIndex] : null;
   const activeCinema = activeTab === "cinemas" ? filteredCinemas[selectedIndex] : null;
   const currentSpinnerFrame = spinnerFrames[spinnerIdx];
+  const cacheInfo = getCacheInfo();
 
   return (
-    <box width={columns} height={rows} flexDirection="column" padding={1}>
+    // Keep the dashboard in its own reconciliation tree when closing the detail modal.
+    <box key="dashboard" width={columns} height={rows} flexDirection="column" padding={1}>
       {/* Header */}
       <box border padding={1} flexDirection="row" justifyContent="space-between" style={{ borderColor: "cyan" }}>
         <box flexDirection="row">
-          <text fg="yellow"><strong>{NF.film} CINEX VENEZUELA TUI</strong></text>
+          <text fg="yellow"><strong>{NF.film} CINEX</strong></text>
           <text fg="gray">  | {NF.city} Ciudad: </text>
           <text fg="cyan"><strong>{selectedCity}</strong></text>
+          <text fg="gray">  | Cache: </text>
+          <text fg={cacheInfo.ageMinutes < 30 ? "green" : "yellow"}>
+            <strong>{cacheInfo.ageMinutes === 0 ? "En vivo" : `hace ${cacheInfo.ageMinutes} min`}</strong>
+          </text>
         </box>
         <box flexDirection="row">
           <text fg="gray">Categoria: </text>
@@ -280,18 +334,18 @@ function CinexApp() {
       </box>
 
       {/* Tabs bar */}
-      <box flexDirection="row" marginY={1}>
-        <box paddingX={2} style={{ backgroundColor: activeTab === "movies" ? "cyan" : "black" }}>
+      <box flexDirection="row" marginY={1} height={1} alignItems="center">
+        <box paddingX={2} height={1} style={{ backgroundColor: activeTab === "movies" ? "cyan" : "black" }}>
           <text fg={activeTab === "movies" ? "black" : "white"}>
             <strong>[1] {NF.film} Peliculas ({filteredMovies.length})</strong>
           </text>
         </box>
-        <box paddingX={2} style={{ backgroundColor: activeTab === "cinemas" ? "cyan" : "black" }}>
+        <box paddingX={2} height={1} style={{ backgroundColor: activeTab === "cinemas" ? "cyan" : "black" }}>
           <text fg={activeTab === "cinemas" ? "black" : "white"}>
             <strong>[2] {NF.theater} Cines ({filteredCinemas.length})</strong>
           </text>
         </box>
-        <box paddingX={2} style={{ backgroundColor: activeTab === "cities" ? "cyan" : "black" }}>
+        <box paddingX={2} height={1} style={{ backgroundColor: activeTab === "cities" ? "cyan" : "black" }}>
           <text fg={activeTab === "cities" ? "black" : "white"}>
             <strong>[3] {NF.city} Ciudades ({cities.length})</strong>
           </text>
@@ -453,7 +507,7 @@ function CinexApp() {
       {/* Footer Hotkeys Bar */}
       <box border marginTop={1} paddingX={1} flexDirection="row" justifyContent="space-between" style={{ borderColor: "cyan" }}>
         <text fg="yellow">
-          <strong>[Tab/1-3] Cambiar vista  |  [↑/↓] Navegar  |  [Enter] Detalle  |  [p] {NF.image} Poster  |  [r] Recargar  |  [q] Salir</strong>
+          <strong>[Tab/1-3] Cambiar vista  |  [↑/↓] Navegar  |  [Enter] Detalle  |  [p] Poster  |  [t] Trailer  |  [r] Recargar  |  [q] Salir</strong>
         </text>
       </box>
     </box>
