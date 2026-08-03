@@ -256,6 +256,8 @@ cinex trailer Spiderman --keep
 cinex trailer Spiderman --open
 ```
 
+> **Nota**: Durante la descarga o reproducción, presiona `[Ctrl+C]` para cancelar/salir y volver al TUI. Solo las películas con trailer disponible muestran la opción `[t]`/trailer.
+
 ---
 
 ### Salas Especiales 4DX y VIP

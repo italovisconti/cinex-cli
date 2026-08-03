@@ -318,9 +318,13 @@ function CinexApp({ initialState = defaultTuiViewState }: { initialState?: TuiVi
             </box>
 
             <box marginTop={1} flexDirection="column">
-              <text fg={T.header}><strong>{NF.image} Presiona [p] poster | [t] {NF.play} trailer | [o] web</strong></text>
-              {detailModalMovie.youtubeUrl && (
-                <text fg={T.link}>{NF.play} YouTube: {detailModalMovie.youtubeUrl}</text>
+              {detailModalMovie.youtubeUrl ? (
+                <>
+                  <text fg={T.header}><strong>{NF.image} Presiona [p] poster | [t] {NF.play} trailer | [o] web</strong></text>
+                  <text fg={T.link}>{NF.play} YouTube: {detailModalMovie.youtubeUrl}</text>
+                </>
+              ) : (
+                <text fg={T.header}><strong>{NF.image} Presiona [p] poster</strong></text>
               )}
             </box>
           </box>
@@ -374,7 +378,7 @@ function CinexApp({ initialState = defaultTuiViewState }: { initialState?: TuiVi
 
         {/* Footer Bar */}
         <box flexShrink={0} paddingX={1} style={{ backgroundColor: T.footerBg }}>
-          <text fg={T.text}><strong> Presiona [Esc/q] Volver | [↑/↓] Navegar salas | [p] Poster | [t] Trailer | [o] Abrir Web</strong></text>
+          <text fg={T.text}><strong> Presiona [Esc/q] Volver | [↑/↓] Navegar salas | [p] Poster{detailModalMovie.youtubeUrl ? " | [t] Trailer | [o] Abrir Web" : ""}</strong></text>
         </box>
       </box>
     );
@@ -591,7 +595,7 @@ function CinexApp({ initialState = defaultTuiViewState }: { initialState?: TuiVi
       {/* Footer Hotkeys Bar */}
       <box border marginTop={1} paddingX={1} flexDirection="row" justifyContent="space-between" style={{ borderColor: T.borderMain }}>
         <text fg={T.header}>
-          <strong>[Tab/1-3] Cambiar vista  |  [/] Buscar  |  [↑/↓] Navegar  |  [Enter] Detalle  |  [p] Poster  |  [t] Trailer  |  [r] Recargar  |  [q] Salir</strong>
+          <strong>[Tab/1-3] Cambiar vista  |  [/] Buscar  |  [↑/↓] Navegar  |  [Enter] Detalle  |  [p] Poster{activeMovie?.youtubeUrl ? "  |  [t] Trailer" : ""}  |  [r] Recargar  |  [q] Salir</strong>
         </text>
       </box>
     </box>

@@ -114,7 +114,7 @@ export async function playTrailerInTerminal(
   const tmpVideo = `/tmp/cinex_trailer_${sanitizedTitle}.mp4`;
 
   console.log(pc.cyan(`\n[+] Descargando trailer completo de "${movieTitle}" con yt-dlp...`));
-  console.log(pc.gray(`    Presiona [Esc], [q] o [Ctrl+C] en cualquier momento para cancelar y volver.\n`));
+  console.log(pc.gray(`    Presiona [Ctrl+C] en cualquier momento para cancelar y volver.\n`));
 
   try {
     const dlArgs = [
@@ -215,7 +215,7 @@ export async function playTrailerInTerminal(
 
     console.log(pc.bold(pc.green(`[✓] Descarga completa.`)));
     console.log(pc.bold(pc.cyan(`\n[▶] Reproduciendo trailer en la terminal...`)));
-    console.log(pc.yellow(`[!] Presiona [q], [Esc] o [Ctrl+C] para salir de la reproduccion.\n`));
+    console.log(pc.yellow(`[!] Presiona [Ctrl+C] para salir de la reproduccion.\n`));
 
     // Play video with timg or mpv
     if (isTimgInstalled()) {
