@@ -17,6 +17,11 @@
         "@types/bun": "latest",
         "@types/react": "^19.2.17",
       },
+      "optionalDependencies": {
+        "@opentui/core-darwin-arm64": "0.4.5",
+        "@opentui/core-darwin-x64": "0.4.5",
+        "@opentui/core-win32-x64": "0.4.5",
+      },
       "peerDependencies": {
         "typescript": "^5",
       },

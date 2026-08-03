@@ -1,6 +1,6 @@
 {
   "name": "cinex-cli",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "CLI y TUI para Cinex Venezuela: cartelera, sinopsis, duración, horarios, cines y salas.",
   "module": "src/index.tsx",
   "type": "module",
@@ -30,5 +30,10 @@
     "picocolors": "^1.1.1",
     "react": "^19.2.6",
     "terminal-image": "^5.0.1"
+  },
+  "optionalDependencies": {
+    "@opentui/core-darwin-arm64": "0.4.5",
+    "@opentui/core-darwin-x64": "0.4.5",
+    "@opentui/core-win32-x64": "0.4.5"
   }
 }

@@ -14,7 +14,7 @@ export async function runCLI(args: string[]) {
   program
     .name("cinex")
     .description(pc.bold(pc.cyan(`${NF.film} CINEX CLI & TUI - Cartelera, peliculas, cines, horarios, sinopsis y posters`)))
-    .version("1.0.0");
+    .version("1.1.0");
 
   program
     .command("tui", { isDefault: args.length <= 2 })
