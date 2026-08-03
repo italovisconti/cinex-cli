@@ -1,14 +1,30 @@
 import React, { useState, useEffect, useRef } from "react";
 import { createCliRenderer, type ScrollBoxRenderable } from "@opentui/core";
 import { createRoot, useKeyboard, useRenderer, useTerminalDimensions } from "@opentui/react";
-import { fetchAllMovies, extractAllCinemas, fetchCities, getCacheInfo } from "./api";
+import { fetchAllMovies, extractAllCinemas, fetchCities, getCacheInfo, normalizeStr } from "./api";
 import { showPosterInTerminal, openPosterInBrowser } from "./image";
 import { playTrailerInTerminal } from "./video";
 import { getGlyphs } from "./glyphs";
 import { getSpinnerFrames } from "./spinner";
 import type { Movie, Cinema, City, Showtime, TheaterShowtimes } from "./types";
 
-function CinexApp() {
+interface TuiViewState {
+  activeTab: "movies" | "cinemas" | "cities";
+  selectedIndex: number;
+  selectedCity: string;
+  searchQuery: string;
+  detailModalMovie: Movie | null;
+}
+
+const defaultTuiViewState: TuiViewState = {
+  activeTab: "movies",
+  selectedIndex: 0,
+  selectedCity: "TODAS",
+  searchQuery: "",
+  detailModalMovie: null
+};
+
+function CinexApp({ initialState = defaultTuiViewState }: { initialState?: TuiViewState }) {
   const renderer = useRenderer();
   const dims = useTerminalDimensions();
   const columns = dims.width || 80;
@@ -21,13 +37,13 @@ function CinexApp() {
   const [cinemas, setCinemas] = useState<Cinema[]>([]);
   const [cities, setCities] = useState<City[]>([]);
 
-  const [activeTab, setActiveTab] = useState<"movies" | "cinemas" | "cities">("movies");
-  const [selectedIndex, setSelectedIndex] = useState(0);
-  const [selectedCity, setSelectedCity] = useState<string>("TODAS");
-  const [searchQuery, setSearchQuery] = useState("");
+  const [activeTab, setActiveTab] = useState<"movies" | "cinemas" | "cities">(initialState.activeTab);
+  const [selectedIndex, setSelectedIndex] = useState(initialState.selectedIndex);
+  const [selectedCity, setSelectedCity] = useState<string>(initialState.selectedCity);
+  const [searchQuery, setSearchQuery] = useState(initialState.searchQuery);
   const [isSearching, setIsSearching] = useState(false);
 
-  const [detailModalMovie, setDetailModalMovie] = useState<Movie | null>(null);
+  const [detailModalMovie, setDetailModalMovie] = useState<Movie | null>(initialState.detailModalMovie);
   const [modalScrollTop, setModalScrollTop] = useState(0);
   const theatersScrollRef = useRef<ScrollBoxRenderable>(null);
 
@@ -67,35 +83,79 @@ function CinexApp() {
     theatersScrollRef.current?.scrollTo({ x: 0, y: modalScrollTop });
   }, [modalScrollTop, detailModalMovie]);
 
+  const normalizedSearchQuery = normalizeStr(searchQuery);
+  const matchesSearch = (value: string) => !normalizedSearchQuery || normalizeStr(value).includes(normalizedSearchQuery);
+
   const filteredMovies = movies.filter((m: Movie) => {
-    const matchesSearch = !searchQuery || m.title.toLowerCase().includes(searchQuery.toLowerCase()) || m.genre.toLowerCase().includes(searchQuery.toLowerCase());
+    const matchesSearchQuery = matchesSearch(`${m.title} ${m.genre}`);
     const matchesCity = selectedCity === "TODAS" || m.theaters.some((t: TheaterShowtimes) => t.city?.toUpperCase() === selectedCity.toUpperCase());
-    return matchesSearch && matchesCity;
+    return matchesSearchQuery && matchesCity;
   });
 
   const filteredCinemas = cinemas.filter((c: Cinema) => {
-    const matchesSearch = !searchQuery || c.name.toLowerCase().includes(searchQuery.toLowerCase()) || c.address.toLowerCase().includes(searchQuery.toLowerCase());
+    const matchesSearchQuery = matchesSearch(`${c.name} ${c.address} ${c.city}`);
     const matchesCity = selectedCity === "TODAS" || c.city.toUpperCase() === selectedCity.toUpperCase();
-    return matchesSearch && matchesCity;
+    return matchesSearchQuery && matchesCity;
   });
 
-  const currentListLength = activeTab === "movies" ? filteredMovies.length : activeTab === "cinemas" ? filteredCinemas.length : cities.length;
+  const filteredCities = cities.filter((city: City) => matchesSearch(city.name));
+  const currentListLength = activeTab === "movies" ? filteredMovies.length : activeTab === "cinemas" ? filteredCinemas.length : filteredCities.length;
   const currentMovie = activeTab === "movies" ? filteredMovies[selectedIndex] : null;
+
+  const getViewState = (): TuiViewState => ({
+    activeTab,
+    selectedIndex,
+    selectedCity,
+    searchQuery,
+    detailModalMovie
+  });
 
   const openTerminalPoster = (movie: Movie) => {
     if (!movie || !movie.posterUrl) return;
+    const previousView = getViewState();
     renderer.destroy();
     void (async () => {
       try {
         await showPosterInTerminal(movie.title, movie.posterUrl);
       } finally {
-        await renderTUI();
+        await renderTUI(previousView);
       }
     })();
   };
 
-  useKeyboard((event: { name: string }) => {
-    if (event.name === "q" && !isSearching && !detailModalMovie) {
+  useKeyboard((event) => {
+    if (isSearching) {
+      if (event.name === "escape") {
+        setIsSearching(false);
+        setSearchQuery("");
+        setSelectedIndex(0);
+        return;
+      }
+
+      if (event.name === "backspace") {
+        setSearchQuery((query) => query.slice(0, -1));
+        setSelectedIndex(0);
+        return;
+      }
+
+      if (event.name === "return" || event.name === "enter") {
+        setIsSearching(false);
+        return;
+      }
+
+      if (!event.ctrl && !event.meta && !event.option && Array.from(event.sequence).length === 1 && !/[\u0000-\u001f\u007f]/.test(event.sequence)) {
+        setSearchQuery((query) => query + event.sequence);
+        setSelectedIndex(0);
+      }
+      return;
+    }
+
+    if (event.name === "q") {
+      if (detailModalMovie) {
+        setDetailModalMovie(null);
+        setModalScrollTop(0);
+        return;
+      }
       renderer.destroy();
       process.exit(0);
       return;
@@ -117,10 +177,14 @@ function CinexApp() {
     if (event.name === "t" && !isSearching) {
       const targetMovie = detailModalMovie || currentMovie;
       if (targetMovie && targetMovie.youtubeUrl) {
+        const previousView = getViewState();
         renderer.destroy();
-        (async () => {
-          await playTrailerInTerminal(targetMovie.title, targetMovie.youtubeUrl, { tuiMode: true });
-          await renderTUI();
+        void (async () => {
+          try {
+            await playTrailerInTerminal(targetMovie.title, targetMovie.youtubeUrl, { tuiMode: true });
+          } finally {
+            await renderTUI(previousView);
+          }
         })();
       }
       return;
@@ -140,9 +204,9 @@ function CinexApp() {
         setModalScrollTop(0);
         return;
       }
-      if (isSearching) {
-        setIsSearching(false);
+      if (searchQuery) {
         setSearchQuery("");
+        setSelectedIndex(0);
         return;
       }
     }
@@ -158,7 +222,7 @@ function CinexApp() {
     if (event.name === "1") { setActiveTab("movies"); setSelectedIndex(0); return; }
     if (event.name === "2") { setActiveTab("cinemas"); setSelectedIndex(0); return; }
     if (event.name === "3") { setActiveTab("cities"); setSelectedIndex(0); return; }
-    if (event.name === "/") { setIsSearching(true); return; }
+    if (event.name === "/" && !detailModalMovie) { setIsSearching(true); setSelectedIndex(0); return; }
 
     if (event.name === "up" || event.name === "k") {
       if (detailModalMovie) {
@@ -196,8 +260,8 @@ function CinexApp() {
       if (activeTab === "movies" && filteredMovies[selectedIndex]) {
         setDetailModalMovie(filteredMovies[selectedIndex]);
         setModalScrollTop(0);
-      } else if (activeTab === "cities" && cities[selectedIndex]) {
-        setSelectedCity(cities[selectedIndex].name);
+      } else if (activeTab === "cities" && filteredCities[selectedIndex]) {
+        setSelectedCity(filteredCities[selectedIndex].name);
         setActiveTab("movies");
         setSelectedIndex(0);
       }
@@ -347,14 +411,18 @@ function CinexApp() {
         </box>
         <box paddingX={2} height={1} style={{ backgroundColor: activeTab === "cities" ? "cyan" : "black" }}>
           <text fg={activeTab === "cities" ? "black" : "white"}>
-            <strong>[3] {NF.city} Ciudades ({cities.length})</strong>
+            <strong>[3] {NF.city} Ciudades ({filteredCities.length})</strong>
           </text>
         </box>
       </box>
 
-      {searchQuery && (
+      {isSearching ? (
         <box marginBottom={1}>
-          <text fg="magenta">{NF.search} Filtro busqueda: "{searchQuery}" (Presiona Esc para limpiar)</text>
+          <text fg="magenta"><strong>{NF.search} Buscar: {searchQuery || "_"}  [Enter] Aplicar | [Esc] Limpiar</strong></text>
+        </box>
+      ) : searchQuery && (
+        <box marginBottom={1}>
+          <text fg="magenta">{NF.search} Filtro: "{searchQuery}" ([/] editar | [Esc] limpiar)</text>
         </box>
       )}
 
@@ -414,7 +482,7 @@ function CinexApp() {
                 })}
 
               {activeTab === "cities" &&
-                cities.map((city: City, idx: number) => {
+                filteredCities.map((city: City, idx: number) => {
                   const isSelected = idx === selectedIndex;
                   const isCurrentCity = city.name === selectedCity;
                   return (
@@ -507,14 +575,14 @@ function CinexApp() {
       {/* Footer Hotkeys Bar */}
       <box border marginTop={1} paddingX={1} flexDirection="row" justifyContent="space-between" style={{ borderColor: "cyan" }}>
         <text fg="yellow">
-          <strong>[Tab/1-3] Cambiar vista  |  [↑/↓] Navegar  |  [Enter] Detalle  |  [p] Poster  |  [t] Trailer  |  [r] Recargar  |  [q] Salir</strong>
+          <strong>[Tab/1-3] Cambiar vista  |  [/] Buscar  |  [↑/↓] Navegar  |  [Enter] Detalle  |  [p] Poster  |  [t] Trailer  |  [r] Recargar  |  [q] Salir</strong>
         </text>
       </box>
     </box>
   );
 }
 
-export async function renderTUI() {
+export async function renderTUI(initialState: TuiViewState = defaultTuiViewState) {
   const renderer = await createCliRenderer();
-  createRoot(renderer).render(<CinexApp />);
+  createRoot(renderer).render(<CinexApp initialState={initialState} />);
 }

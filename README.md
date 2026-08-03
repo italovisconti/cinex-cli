@@ -30,6 +30,7 @@
   - [macOS](#macos)
   - [Windows](#windows)
 - [Instalacion desde Codigo Fuente](#instalacion-desde-codigo-fuente)
+- [Generar Builds de Release](#generar-builds-de-release)
 - [Guia de Uso](#guia-de-uso)
   - [Interfaz Grafica TUI](#interfaz-grafica-tui)
   - [Cartelera de Peliculas](#cartelera-de-peliculas)
@@ -147,6 +148,20 @@ bun run tui
 
 ---
 
+## Generar Builds de Release
+
+El comando de release compila los ejecutables para Linux x64, macOS (Apple Silicon e Intel) y Windows x64. Los archivos y su manifiesto `SHA256SUMS` se generan en `dist/release/v<version>/`.
+
+> Requiere Bun `1.3.13` o superior. Si es necesario, actualiza con `bun upgrade`.
+
+```bash
+bun run release:build
+```
+
+El script descarga automaticamente los bindings de OpenTUI que faltan para la compilacion cruzada.
+
+---
+
 ## Guia de Uso
 
 ### Interfaz Grafica TUI
@@ -169,9 +184,9 @@ bun run tui
 - `[Enter]`: Abrir modal con la sinopsis completa, formatos, trailer y horarios en todas las salas.
 - `[p]`: Renderizar el poster oficial en pantalla completa DENTRO de la terminal.
 - `[t]`: Descargar y reproducir el trailer oficial en la terminal (usando yt-dlp / timg / navegador).
-- `[/]`: Filtrar o buscar por texto en tiempo real.
+- `[/]`: Abrir la busqueda/filtro en tiempo real. Escribe para filtrar, usa `[Backspace]` para borrar y `[Enter]` para conservar el filtro.
 - `[r]`: Recargar datos en tiempo real desde Cinex Venezuela.
-- `[Esc]`: Cerrar modal o limpiar filtro de busqueda.
+- `[Esc]`: Cerrar modal, cancelar la busqueda activa o limpiar el filtro aplicado.
 - `[q]`: Salir de la aplicacion.
 
 ---

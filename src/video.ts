@@ -30,6 +30,48 @@ export function isTimgInstalled(): boolean {
   }
 }
 
+function isExitKey(chunk: Buffer): boolean {
+  const key = chunk.toString();
+  return key === "\u001b" || key === "q" || key === "Q" || key === "\u0003";
+}
+
+async function runPlayback(command: string, args: string[]): Promise<void> {
+  await new Promise<void>((resolve) => {
+    const child = spawn(command, args, { stdio: ["ignore", "inherit", "inherit"] });
+    const wasRaw = process.stdin.isRaw;
+    let finished = false;
+
+    const cleanup = () => {
+      if (!process.stdin.isTTY) return;
+      process.stdin.removeListener("data", onData);
+      if (!wasRaw) process.stdin.setRawMode(false);
+      process.stdin.pause();
+    };
+
+    const finish = () => {
+      if (finished) return;
+      finished = true;
+      cleanup();
+      resolve();
+    };
+
+    const onData = (chunk: Buffer) => {
+      if (isExitKey(chunk) && child.exitCode === null) {
+        child.kill("SIGINT");
+      }
+    };
+
+    if (process.stdin.isTTY) {
+      if (!wasRaw) process.stdin.setRawMode(true);
+      process.stdin.resume();
+      process.stdin.on("data", onData);
+    }
+
+    child.once("close", finish);
+    child.once("error", finish);
+  });
+}
+
 export async function playTrailerInTerminal(
   movieTitle: string,
   youtubeUrl: string,
@@ -71,21 +113,8 @@ export async function playTrailerInTerminal(
       const child = spawn(ytDlpBin, dlArgs, { stdio: ["ignore", "pipe", "pipe"] });
 
       let keyHandler: ((chunk: Buffer) => void) | null = null;
-      if (process.stdin.isTTY) {
-        try {
-          process.stdin.setRawMode(true);
-          process.stdin.resume();
-          keyHandler = (chunk: Buffer) => {
-            const str = chunk.toString();
-            if (str === "\u001b" || str === "q" || str === "Q" || str === "\u0003") {
-              child.kill("SIGINT");
-              try { execSync(`rm -f "${tmpVideo}"`); } catch (_) {}
-              reject(new Error("CANCELLED"));
-            }
-          };
-          process.stdin.on("data", keyHandler);
-        } catch (_) {}
-      }
+      let cancelRequested = false;
+      let settled = false;
 
       const cleanupKeys = () => {
         if (keyHandler && process.stdin.isTTY) {
@@ -96,6 +125,28 @@ export async function playTrailerInTerminal(
           } catch (_) {}
         }
       };
+
+      const rejectOnce = (error: Error) => {
+        if (settled) return;
+        settled = true;
+        cleanupKeys();
+        reject(error);
+      };
+
+      if (process.stdin.isTTY) {
+        try {
+          process.stdin.setRawMode(true);
+          process.stdin.resume();
+          keyHandler = (chunk: Buffer) => {
+            if (isExitKey(chunk) && !cancelRequested) {
+              cancelRequested = true;
+              child.kill("SIGINT");
+              try { execSync(`rm -f "${tmpVideo}"`); } catch (_) {}
+            }
+          };
+          process.stdin.on("data", keyHandler);
+        } catch (_) {}
+      }
 
       child.stdout.on("data", (data: Buffer) => {
         const text = data.toString();
@@ -115,8 +166,12 @@ export async function playTrailerInTerminal(
       });
 
       child.on("close", (code) => {
+        if (settled) return;
+        settled = true;
         cleanupKeys();
-        if (code === 0) {
+        if (cancelRequested) {
+          reject(new Error("CANCELLED"));
+        } else if (code === 0) {
           process.stdout.write("\n\n");
           resolve();
         } else {
@@ -125,8 +180,7 @@ export async function playTrailerInTerminal(
       });
 
       child.on("error", (err) => {
-        cleanupKeys();
-        reject(err);
+        rejectOnce(err);
       });
     });
 
@@ -137,13 +191,13 @@ export async function playTrailerInTerminal(
     // Play video with timg or mpv
     if (isTimgInstalled()) {
       try {
-        execSync(`timg -g 65x30 "${tmpVideo}"`, { stdio: "inherit" });
+        await runPlayback("timg", ["-g", "65x30", tmpVideo]);
       } catch (_) {}
     } else {
       try {
         const isMpv = execSync("which mpv", { stdio: "pipe" }).toString().trim();
         if (isMpv) {
-          execSync(`mpv --vo=caca "${tmpVideo}"`, { stdio: "inherit" });
+          await runPlayback("mpv", ["--vo=caca", tmpVideo]);
         } else {
           console.log(pc.yellow("[!] Instala 'timg' para la mejor reproduccion de video en terminal."));
         }
