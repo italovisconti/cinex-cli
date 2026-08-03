@@ -21,6 +21,10 @@
   <em>"— ¿Nunca has querido revisar la cartelera de Cinex desde la terminal...?"</em>
 </p>
 
+<p align="center">
+  <img src="static/video-showcase.gif" alt="cinex-cli showcase" width="640" />
+</p>
+
 ---
 
 ## Indice

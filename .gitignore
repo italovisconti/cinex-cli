@@ -6,6 +6,9 @@ out
 dist
 *.tgz
 
+# showcase source video (gif is tracked in static/)
+static/video-showcase.mp4
+
 # code coverage
 coverage
 *.lcov
