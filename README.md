@@ -5,7 +5,7 @@
 <p align="center">
   <img src="https://img.shields.io/badge/TypeScript-5.0+-3178C6?logo=typescript&logoColor=white" alt="TypeScript" />
   <img src="https://img.shields.io/badge/Runtime-Bun-fbf0df?logo=bun&logoColor=black" alt="Bun" />
-  <img src="https://img.shields.io/badge/TUI-OpenTUI_React-61DAFB?logo=react&logoColor=black" alt="OpenTUI" />
+  <img src="https://img.shields.io/badge/TUI-Interactive-61DAFB?logo=react&logoColor=black" alt="TUI" />
   <img src="https://img.shields.io/badge/CLI-Commander-ff6348" alt="Commander" />
   <img src="https://img.shields.io/badge/License-MIT-4CAF50" alt="License" />
 </p>
@@ -31,7 +31,7 @@
   - [Windows](#windows)
 - [Instalacion desde Codigo Fuente](#instalacion-desde-codigo-fuente)
 - [Guia de Uso](#guia-de-uso)
-  - [Interfaz Grafica TUI (OpenTUI)](#interfaz-grafica-tui-opentui)
+  - [Interfaz Grafica TUI](#interfaz-grafica-tui)
   - [Cartelera de Peliculas](#cartelera-de-peliculas)
   - [Sinopsis, Duracion y Horarios](#sinopsis-duracion-y-horarios)
   - [Ver Poster / Imagen en Terminal](#ver-poster--imagen-en-terminal)
@@ -149,8 +149,8 @@ bun run tui
 
 ## Guia de Uso
 
-### Interfaz Grafica TUI (OpenTUI)
-Inicia la experiencia visual interactiva en la terminal utilizando **OpenTUI React**. Puedes ejecutar directamente `cinex` o `cinex tui`:
+### Interfaz Grafica TUI
+Inicia la experiencia visual interactiva en la terminal. Puedes ejecutar directamente `cinex` o `cinex tui`:
 
 ```bash
 # Iniciar TUI directamente (modo por defecto)
@@ -362,7 +362,7 @@ Para renderizar posters e imágenes oficiales sin distorsión dentro de la termi
 
 - **Lenguaje**: TypeScript 5+
 - **Runtime**: Bun 1.0+ / Node.js
-- **TUI Framework**: [OpenTUI React](https://opentui.com/) (`@opentui/react`, `@opentui/core`)
+- **TUI Framework**: React TUI (`@opentui/react`, `@opentui/core`)
 - **CLI Framework**: Commander & Picocolors
 - **Scraper / Parser**: Cheerio
 - **Image Renderer**: `timg` / `terminal-image`
