@@ -179,12 +179,13 @@ bun run tui
 ```
 
 #### Atajos de teclado en TUI:
-- `[1]`, `[2]`, `[3]` o `[Tab]`: Alternar entre **Peliculas (Cartelera)**, **Cines (Salas)** y **Ciudades**.
-- `[↑]` / `[↓]` o `[k]` / `[j]`: Navegar por la lista.
+- `[1]`, `[2]`, `[3]`, `[Tab]` o `[←]`/`[→]` (y `[h]`/`[l]`): Alternar entre **Peliculas (Cartelera)**, **Cines (Salas)** y **Ciudades**.
+- `[↑]` / `[↓]`, `[k]` / `[j]`: Navegar por la lista.
+- `[g]` / `[G]` (o `[shift]+g`): Ir al **inicio** / **final** de la lista (en el modal desplaza arriba/abajo).
 - `[Enter]`: Abrir modal con la sinopsis completa, formatos, trailer y horarios en todas las salas.
 - `[p]`: Renderizar el poster oficial en pantalla completa DENTRO de la terminal.
 - `[t]`: Descargar y reproducir el trailer oficial en la terminal (usando yt-dlp / timg / navegador).
-- `[/]`: Abrir la busqueda/filtro en tiempo real. Escribe para filtrar, usa `[Backspace]` para borrar y `[Enter]` para conservar el filtro.
+- `[/]`: Abrir la busqueda/filtro en tiempo real dentro de la vista actual. En el detalle de una pelicula filtra solo los cines y horarios de esa pelicula. Escribe para filtrar, usa `[Backspace]` para borrar y `[Enter]` para conservar el filtro.
 - `[r]`: Recargar datos en tiempo real desde Cinex Venezuela.
 - `[Esc]`: Cerrar modal, cancelar la busqueda activa o limpiar el filtro aplicado.
 - `[q]`: Salir de la aplicacion.

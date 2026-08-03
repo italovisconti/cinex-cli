@@ -25,6 +25,8 @@ const defaultTuiViewState: TuiViewState = {
   detailModalMovie: null
 };
 
+const TAB_ORDER: TuiViewState["activeTab"][] = ["movies", "cinemas", "cities"];
+
 function CinexApp({ initialState = defaultTuiViewState }: { initialState?: TuiViewState }) {
   const renderer = useRenderer();
   const dims = useTerminalDimensions();
@@ -44,10 +46,13 @@ function CinexApp({ initialState = defaultTuiViewState }: { initialState?: TuiVi
   const [selectedCity, setSelectedCity] = useState<string>(initialState.selectedCity);
   const [searchQuery, setSearchQuery] = useState(initialState.searchQuery);
   const [isSearching, setIsSearching] = useState(false);
+  const [detailSearchQuery, setDetailSearchQuery] = useState("");
+  const [isDetailSearching, setIsDetailSearching] = useState(false);
 
   const [detailModalMovie, setDetailModalMovie] = useState<Movie | null>(initialState.detailModalMovie);
   const [modalScrollTop, setModalScrollTop] = useState(0);
   const theatersScrollRef = useRef<ScrollBoxRenderable>(null);
+  const masterListScrollRef = useRef<ScrollBoxRenderable>(null);
 
   const [spinnerIdx, setSpinnerIdx] = useState(0);
 
@@ -85,6 +90,10 @@ function CinexApp({ initialState = defaultTuiViewState }: { initialState?: TuiVi
     theatersScrollRef.current?.scrollTo({ x: 0, y: modalScrollTop });
   }, [modalScrollTop, detailModalMovie]);
 
+  useEffect(() => {
+    masterListScrollRef.current?.scrollChildIntoView(`master-item-${selectedIndex}`);
+  }, [selectedIndex, activeTab, detailModalMovie]);
+
   const normalizedSearchQuery = normalizeStr(searchQuery);
   const matchesSearch = (value: string) => !normalizedSearchQuery || normalizeStr(value).includes(normalizedSearchQuery);
 
@@ -101,6 +110,10 @@ function CinexApp({ initialState = defaultTuiViewState }: { initialState?: TuiVi
   });
 
   const filteredCities = cities.filter((city: City) => matchesSearch(city.name));
+  const normalizedDetailSearchQuery = normalizeStr(detailSearchQuery);
+  const filteredDetailTheaters = detailModalMovie?.theaters.filter((theater: TheaterShowtimes) =>
+    !normalizedDetailSearchQuery || normalizeStr(`${theater.cinemaName} ${theater.address} ${theater.city || ""}`).includes(normalizedDetailSearchQuery)
+  ) ?? [];
   const currentListLength = activeTab === "movies" ? filteredMovies.length : activeTab === "cinemas" ? filteredCinemas.length : filteredCities.length;
   const currentMovie = activeTab === "movies" ? filteredMovies[selectedIndex] : null;
 
@@ -126,6 +139,32 @@ function CinexApp({ initialState = defaultTuiViewState }: { initialState?: TuiVi
   };
 
   useKeyboard((event) => {
+    if (isDetailSearching) {
+      if (event.name === "escape") {
+        setIsDetailSearching(false);
+        setDetailSearchQuery("");
+        setModalScrollTop(0);
+        return;
+      }
+
+      if (event.name === "backspace") {
+        setDetailSearchQuery((query) => query.slice(0, -1));
+        setModalScrollTop(0);
+        return;
+      }
+
+      if (event.name === "return" || event.name === "enter") {
+        setIsDetailSearching(false);
+        return;
+      }
+
+      if (!event.ctrl && !event.meta && !event.option && Array.from(event.sequence).length === 1 && !/[\u0000-\u001f\u007f]/.test(event.sequence)) {
+        setDetailSearchQuery((query) => query + event.sequence);
+        setModalScrollTop(0);
+      }
+      return;
+    }
+
     if (isSearching) {
       if (event.name === "escape") {
         setIsSearching(false);
@@ -155,6 +194,8 @@ function CinexApp({ initialState = defaultTuiViewState }: { initialState?: TuiVi
     if (event.name === "q") {
       if (detailModalMovie) {
         setDetailModalMovie(null);
+        setDetailSearchQuery("");
+        setIsDetailSearching(false);
         setModalScrollTop(0);
         return;
       }
@@ -203,7 +244,13 @@ function CinexApp({ initialState = defaultTuiViewState }: { initialState?: TuiVi
 
     if (event.name === "escape") {
       if (detailModalMovie) {
+        if (detailSearchQuery) {
+          setDetailSearchQuery("");
+          setModalScrollTop(0);
+          return;
+        }
         setDetailModalMovie(null);
+        setIsDetailSearching(false);
         setModalScrollTop(0);
         return;
       }
@@ -225,7 +272,49 @@ function CinexApp({ initialState = defaultTuiViewState }: { initialState?: TuiVi
     if (event.name === "1") { setActiveTab("movies"); setSelectedIndex(0); return; }
     if (event.name === "2") { setActiveTab("cinemas"); setSelectedIndex(0); return; }
     if (event.name === "3") { setActiveTab("cities"); setSelectedIndex(0); return; }
-    if (event.name === "/" && !detailModalMovie) { setIsSearching(true); setSelectedIndex(0); return; }
+
+    if (!detailModalMovie && (event.name === "left" || event.name === "h")) {
+      const idx = TAB_ORDER.indexOf(activeTab);
+      setActiveTab(TAB_ORDER[(idx - 1 + TAB_ORDER.length) % TAB_ORDER.length] ?? "movies");
+      setSelectedIndex(0);
+      return;
+    }
+
+    if (!detailModalMovie && (event.name === "right" || event.name === "l")) {
+      const idx = TAB_ORDER.indexOf(activeTab);
+      setActiveTab(TAB_ORDER[(idx + 1) % TAB_ORDER.length] ?? "movies");
+      setSelectedIndex(0);
+      return;
+    }
+
+    if (event.name === "g" && event.shift) {
+      if (detailModalMovie) {
+        setModalScrollTop(99999);
+      } else {
+        setSelectedIndex(Math.max(0, currentListLength - 1));
+      }
+      return;
+    }
+
+    if (event.name === "g") {
+      if (detailModalMovie) {
+        setModalScrollTop(0);
+      } else {
+        setSelectedIndex(0);
+      }
+      return;
+    }
+
+    if (event.name === "/") {
+      if (detailModalMovie) {
+        setIsDetailSearching(true);
+        setModalScrollTop(0);
+      } else {
+        setIsSearching(true);
+        setSelectedIndex(0);
+      }
+      return;
+    }
 
     if (event.name === "up" || event.name === "k") {
       if (detailModalMovie) {
@@ -262,6 +351,8 @@ function CinexApp({ initialState = defaultTuiViewState }: { initialState?: TuiVi
     if (event.name === "return" || event.name === "enter") {
       if (activeTab === "movies" && filteredMovies[selectedIndex]) {
         setDetailModalMovie(filteredMovies[selectedIndex]);
+        setDetailSearchQuery("");
+        setIsDetailSearching(false);
         setModalScrollTop(0);
       } else if (activeTab === "cities" && filteredCities[selectedIndex]) {
         setSelectedCity(filteredCities[selectedIndex].name);
@@ -332,12 +423,20 @@ function CinexApp({ initialState = defaultTuiViewState }: { initialState?: TuiVi
           {/* Right Column (With Scroller & Colored Badges) */}
           <box width="55%" flexDirection="column" paddingX={1} border style={{ borderColor: T.borderInner }}>
             <box flexDirection="row" justifyContent="space-between">
-              <text fg={T.success}><strong>{NF.ticket} CINES Y HORARIOS ({detailModalMovie.theaters.length} salas):</strong></text>
-              <text fg={T.muted}><strong>[↑/↓ Scroll]</strong></text>
+              <text fg={T.success}><strong>{NF.ticket} CINES Y HORARIOS ({filteredDetailTheaters.length} salas):</strong></text>
+              <text fg={T.muted}><strong>[↑/↓ j/k] Scroll | [/] Buscar</strong></text>
             </box>
 
+            {(isDetailSearching || detailSearchQuery) && (
+              <box marginBottom={1}>
+                <text fg={T.accent}>
+                  <strong>{NF.search} {isDetailSearching ? `Buscar cines: ${detailSearchQuery || "_"}  [Enter] Aplicar | [Esc] Limpiar` : `Filtro de cines: "${detailSearchQuery}" ([/] editar | [Esc] limpiar)`}</strong>
+                </text>
+              </box>
+            )}
+
             <scrollbox ref={theatersScrollRef} flexGrow={1}>
-              {detailModalMovie.theaters.map((t: TheaterShowtimes, idx: number) => (
+              {filteredDetailTheaters.map((t: TheaterShowtimes, idx: number) => (
                 <box key={idx} flexDirection="column" marginBottom={1} border style={{ borderColor: T.borderInner }} paddingX={1}>
                   <text fg={T.header}><strong>{NF.theater} {t.cinemaName} ({t.city || "VE"})</strong></text>
                   <text fg={T.muted}>{t.address.slice(0, 55)}</text>
@@ -378,7 +477,7 @@ function CinexApp({ initialState = defaultTuiViewState }: { initialState?: TuiVi
 
         {/* Footer Bar */}
         <box flexShrink={0} paddingX={1} style={{ backgroundColor: T.footerBg }}>
-          <text fg={T.text}><strong> Presiona [Esc/q] Volver | [↑/↓] Navegar salas | [p] Poster{detailModalMovie.youtubeUrl ? " | [t] Trailer | [o] Abrir Web" : ""}</strong></text>
+          <text fg={T.text}><strong> Presiona [Esc/q] Volver | [/] Buscar cines | [↑/↓ j/k] Navegar salas | [g/G] Inicio/Fin | [p] Poster{detailModalMovie.youtubeUrl ? " | [t] Trailer | [o] Abrir Web" : ""}</strong></text>
         </box>
       </box>
     );
@@ -445,16 +544,17 @@ function CinexApp({ initialState = defaultTuiViewState }: { initialState?: TuiVi
           <text fg={T.header}><strong>{currentSpinnerFrame} Cargando cartelera y funciones de Cinex Venezuela...</strong></text>
         </box>
       ) : (
-        <box flexDirection="row" flexGrow={1}>
+        <box height={0} flexDirection="row" flexGrow={1} overflow="hidden">
           {/* Left Master List */}
-          <box width="45%" border padding={1} flexDirection="column" style={{ borderColor: T.text }}>
-            <scrollbox height={rows - 10}>
+          <box width="45%" border padding={1} flexDirection="column" overflow="hidden" style={{ borderColor: T.text }}>
+            <scrollbox ref={masterListScrollRef} flexGrow={1}>
               {activeTab === "movies" &&
                 filteredMovies.map((m: Movie, idx: number) => {
                   const isSelected = idx === selectedIndex;
                   return (
                     <box
                       key={m.id}
+                      id={`master-item-${idx}`}
                       paddingX={1}
                       marginBottom={1}
                       style={{ backgroundColor: isSelected ? T.selectedBg : "transparent" }}
@@ -478,6 +578,7 @@ function CinexApp({ initialState = defaultTuiViewState }: { initialState?: TuiVi
                   return (
                     <box
                       key={idx}
+                      id={`master-item-${idx}`}
                       paddingX={1}
                       marginBottom={1}
                       style={{ backgroundColor: isSelected ? T.selectedBg : "transparent" }}
@@ -502,6 +603,7 @@ function CinexApp({ initialState = defaultTuiViewState }: { initialState?: TuiVi
                   return (
                     <box
                       key={idx}
+                      id={`master-item-${idx}`}
                       paddingX={1}
                       marginBottom={1}
                       style={{ backgroundColor: isSelected ? T.selectedBg : "transparent" }}
@@ -519,9 +621,9 @@ function CinexApp({ initialState = defaultTuiViewState }: { initialState?: TuiVi
           </box>
 
           {/* Right Detail Inspector */}
-          <box width="55%" border padding={1} flexDirection="column" style={{ borderColor: T.borderInner }}>
+          <box width="55%" border padding={1} flexDirection="column" overflow="hidden" style={{ borderColor: T.borderInner }}>
             {activeTab === "movies" && activeMovie && (
-              <scrollbox height={rows - 10}>
+              <scrollbox flexGrow={1}>
                 <text fg={T.header}><strong>{NF.film} {activeMovie.title}</strong></text>
                 <text fg={T.muted}>{NF.clock} Duracion: {activeMovie.durationMinutes} mins | Censura: {activeMovie.censorship} | Genero: {activeMovie.genre}</text>
                 <text fg={T.accent}>Formatos: {activeMovie.formats.join(" / ")}</text>
@@ -551,7 +653,7 @@ function CinexApp({ initialState = defaultTuiViewState }: { initialState?: TuiVi
             )}
 
             {activeTab === "cinemas" && activeCinema && (
-              <scrollbox height={rows - 10}>
+              <scrollbox flexGrow={1}>
                 <text fg={T.header}><strong>{NF.theater} CINEX {activeCinema.name}</strong></text>
                 <text fg={T.title}>Ciudad: {activeCinema.city}</text>
                 <text fg={T.muted}>Direccion: {activeCinema.address}</text>
@@ -595,7 +697,7 @@ function CinexApp({ initialState = defaultTuiViewState }: { initialState?: TuiVi
       {/* Footer Hotkeys Bar */}
       <box border marginTop={1} paddingX={1} flexDirection="row" justifyContent="space-between" style={{ borderColor: T.borderMain }}>
         <text fg={T.header}>
-          <strong>[Tab/1-3] Cambiar vista  |  [/] Buscar  |  [↑/↓] Navegar  |  [Enter] Detalle  |  [p] Poster{activeMovie?.youtubeUrl ? "  |  [t] Trailer" : ""}  |  [r] Recargar  |  [q] Salir</strong>
+          <strong>[1-3/←→] Vista | [/] Buscar | [↑/↓ j/k] Navegar | [g/G] Inicio/Fin | [Enter] Detalle | [p] Poster{activeMovie?.youtubeUrl ? " | [t] Trailer" : ""} | [r] Recargar | [q] Salir</strong>
         </text>
       </box>
     </box>
