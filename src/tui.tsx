@@ -422,13 +422,13 @@ function CinexApp({ initialState = defaultTuiViewState }: { initialState?: TuiVi
 
           {/* Right Column (With Scroller & Colored Badges) */}
           <box width="55%" flexDirection="column" paddingX={1} border style={{ borderColor: T.borderInner }}>
-            <box flexDirection="row" justifyContent="space-between">
+            <box flexDirection="column" flexShrink={0} marginBottom={1}>
               <text fg={T.success}><strong>{NF.ticket} CINES Y HORARIOS ({filteredDetailTheaters.length} salas):</strong></text>
-              <text fg={T.muted}><strong>[↑/↓ j/k] Scroll | [/] Buscar</strong></text>
+              <text fg={T.muted}>[↑/↓ j/k] Scroll | [/] Buscar</text>
             </box>
 
             {(isDetailSearching || detailSearchQuery) && (
-              <box marginBottom={1}>
+              <box flexShrink={0} marginBottom={1}>
                 <text fg={T.accent}>
                   <strong>{NF.search} {isDetailSearching ? `Buscar cines: ${detailSearchQuery || "_"}  [Enter] Aplicar | [Esc] Limpiar` : `Filtro de cines: "${detailSearchQuery}" ([/] editar | [Esc] limpiar)`}</strong>
                 </text>
