@@ -150,7 +150,7 @@ bun run tui
 ## Guia de Uso
 
 ### Interfaz Grafica TUI
-Inicia la experiencia visual interactiva en la terminal. Puedes ejecutar directamente `cinex` o `cinex tui`:
+Inicia la TUI en la terminal. Puedes ejecutar directamente `cinex` o `cinex tui`:
 
 ```bash
 # Iniciar TUI directamente (modo por defecto)
