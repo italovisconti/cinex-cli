@@ -4,12 +4,15 @@ export interface Showtime {
   lang: "ESP" | "SUB" | "N/A";
   isPassed: boolean;
   status: "Proyectada" | "Disponible";
+  sessionId?: string;
+  seatsAvailable?: number;
 }
 
 export interface TheaterShowtimes {
   cinemaName: string;
   address: string;
   city?: string;
+  cinemaCode?: string;
   showtimes: Showtime[];
 }
 

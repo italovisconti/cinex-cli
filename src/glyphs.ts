@@ -11,6 +11,9 @@ export interface Glyphs {
   plus: string;
   check: string;
   star: string;
+  bolt: string;
+  sparkle: string;
+  bulb: string;
 }
 
 const NERD_GLYPHS: Glyphs = {
@@ -18,14 +21,17 @@ const NERD_GLYPHS: Glyphs = {
   theater: "󰨄",
   city: "󰈤",
   clock: "󰥔",
-  ticket: "󰓓",
+  ticket: "󰔖",
   play: "󰐊",
   image: "󰋩",
   search: "󰍉",
   arrow: "󰅂",
   plus: "󰐕",
   check: "󰄬",
-  star: "󰓎"
+  star: "󰓎",
+  bolt: "󱐋",
+  sparkle: "󰫢",
+  bulb: "󰌵"
 };
 
 const STANDARD_GLYPHS: Glyphs = {
@@ -40,7 +46,10 @@ const STANDARD_GLYPHS: Glyphs = {
   arrow: "›",
   plus: "[+]",
   check: "✓",
-  star: "*"
+  star: "*",
+  bolt: "[4DX]",
+  sparkle: "[VIP]",
+  bulb: "[TIP]"
 };
 
 export function getGlyphs(): Glyphs {

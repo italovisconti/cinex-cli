@@ -5,6 +5,7 @@ import { fetchAllMovies, extractAllCinemas, fetchCities, getCacheInfo, normalize
 import { showPosterInTerminal, openPosterInBrowser } from "./image";
 import { playTrailerInTerminal } from "./video";
 import { getGlyphs } from "./glyphs";
+import { getTheme } from "./theme";
 import { getSpinnerFrames } from "./spinner";
 import type { Movie, Cinema, City, Showtime, TheaterShowtimes } from "./types";
 
@@ -30,6 +31,7 @@ function CinexApp({ initialState = defaultTuiViewState }: { initialState?: TuiVi
   const columns = dims.width || 80;
   const rows = dims.height || 24;
   const NF = getGlyphs();
+  const T = getTheme().tui;
   const spinnerFrames = getSpinnerFrames();
 
   const [loading, setLoading] = useState(true);
@@ -181,6 +183,7 @@ function CinexApp({ initialState = defaultTuiViewState }: { initialState?: TuiVi
         renderer.destroy();
         void (async () => {
           try {
+            await new Promise<void>((resolve) => setTimeout(resolve, 60));
             await playTrailerInTerminal(targetMovie.title, targetMovie.youtubeUrl, { tuiMode: true });
           } finally {
             await renderTUI(previousView);
@@ -274,16 +277,16 @@ function CinexApp({ initialState = defaultTuiViewState }: { initialState?: TuiVi
 
     return (
       // A distinct key prevents the main view's layout nodes from being reused by the modal.
-      <box key="movie-detail" width={columns} height={rows} flexDirection="column" padding={0} border overflow="hidden" style={{ borderColor: "cyan" }}>
+      <box key="movie-detail" width={columns} height={rows} flexDirection="column" padding={0} border overflow="hidden" style={{ borderColor: T.borderMain }}>
         {/* Header */}
-        <box height={3} flexShrink={0} border paddingX={1} marginBottom={0} flexDirection="row" justifyContent="space-between" alignItems="center" style={{ borderColor: "yellow" }}>
+        <box height={3} flexShrink={0} border paddingX={1} marginBottom={0} flexDirection="row" justifyContent="space-between" alignItems="center" style={{ borderColor: T.borderAccent }}>
           <box flexDirection="row">
-            <text fg="yellow">
+            <text fg={T.header}>
               <strong>{NF.film} {detailModalMovie.title.toUpperCase()}</strong>
             </text>
           </box>
           <box flexDirection="row">
-            <text fg="gray">
+            <text fg={T.muted}>
               {NF.clock} {detailModalMovie.durationMinutes} min  |  Censura: {detailModalMovie.censorship}  |  Genero: {detailModalMovie.genre}
             </text>
           </box>
@@ -292,20 +295,20 @@ function CinexApp({ initialState = defaultTuiViewState }: { initialState?: TuiVi
         {/* Middle Body */}
         <box height={0} flexDirection="row" flexGrow={1} overflow="hidden">
           {/* Left Column */}
-          <box width="45%" flexDirection="column" paddingX={1} border style={{ borderColor: "gray" }}>
-            <text fg="cyan"><strong>[SINOPSIS]</strong></text>
+          <box width="45%" flexDirection="column" paddingX={1} border style={{ borderColor: T.borderInner }}>
+            <text fg={T.title}><strong>[SINOPSIS]</strong></text>
             <scrollbox height={synopsisHeight} marginBottom={1}>
-              <text fg="white">{detailModalMovie.synopsis}</text>
+              <text fg={T.text}>{detailModalMovie.synopsis}</text>
             </scrollbox>
 
-            <text fg="cyan"><strong>[FORMATOS DISPONIBLES]</strong></text>
+            <text fg={T.title}><strong>[FORMATOS DISPONIBLES]</strong></text>
             <box flexDirection="row" flexWrap="wrap" marginY={1}>
               {detailModalMovie.formats.map((fmt: string, fIdx: number) => {
-                let fmtColor = "white";
-                if (fmt.includes("4DX")) fmtColor = "magenta";
-                else if (fmt.includes("VIP")) fmtColor = "yellow";
-                else if (fmt.includes("3D")) fmtColor = "cyan";
-                else if (fmt.includes("DIG")) fmtColor = "green";
+                let fmtColor = T.text;
+                if (fmt.includes("4DX")) fmtColor = T.accent;
+                else if (fmt.includes("VIP")) fmtColor = T.warn;
+                else if (fmt.includes("3D")) fmtColor = T.info;
+                else if (fmt.includes("DIG")) fmtColor = T.success;
                 return (
                   <box key={fIdx} marginRight={1} marginBottom={1}>
                     <text fg={fmtColor}><strong>[{fmt}]</strong></text>
@@ -315,41 +318,48 @@ function CinexApp({ initialState = defaultTuiViewState }: { initialState?: TuiVi
             </box>
 
             <box marginTop={1} flexDirection="column">
-              <text fg="yellow"><strong>{NF.image} Presiona [p] poster | [t] {NF.play} trailer | [o] web</strong></text>
+              <text fg={T.header}><strong>{NF.image} Presiona [p] poster | [t] {NF.play} trailer | [o] web</strong></text>
               {detailModalMovie.youtubeUrl && (
-                <text fg="blue">{NF.play} YouTube: {detailModalMovie.youtubeUrl}</text>
+                <text fg={T.link}>{NF.play} YouTube: {detailModalMovie.youtubeUrl}</text>
               )}
             </box>
           </box>
 
           {/* Right Column (With Scroller & Colored Badges) */}
-          <box width="55%" flexDirection="column" paddingX={1} border style={{ borderColor: "gray" }}>
+          <box width="55%" flexDirection="column" paddingX={1} border style={{ borderColor: T.borderInner }}>
             <box flexDirection="row" justifyContent="space-between">
-              <text fg="green"><strong>{NF.ticket} CINES Y HORARIOS ({detailModalMovie.theaters.length} salas):</strong></text>
-              <text fg="gray"><strong>[↑/↓ Scroll]</strong></text>
+              <text fg={T.success}><strong>{NF.ticket} CINES Y HORARIOS ({detailModalMovie.theaters.length} salas):</strong></text>
+              <text fg={T.muted}><strong>[↑/↓ Scroll]</strong></text>
             </box>
 
             <scrollbox ref={theatersScrollRef} flexGrow={1}>
               {detailModalMovie.theaters.map((t: TheaterShowtimes, idx: number) => (
-                <box key={idx} flexDirection="column" marginBottom={1} border style={{ borderColor: "gray" }} paddingX={1}>
-                  <text fg="yellow"><strong>{NF.theater} {t.cinemaName} ({t.city || "VE"})</strong></text>
-                  <text fg="gray">{t.address.slice(0, 55)}</text>
+                <box key={idx} flexDirection="column" marginBottom={1} border style={{ borderColor: T.borderInner }} paddingX={1}>
+                  <text fg={T.header}><strong>{NF.theater} {t.cinemaName} ({t.city || "VE"})</strong></text>
+                  <text fg={T.muted}>{t.address.slice(0, 55)}</text>
                   <box flexDirection="row" flexWrap="wrap" marginTop={1}>
                     {t.showtimes.length === 0 ? (
-                      <text fg="gray">Sin funciones programadas hoy</text>
+                      <text fg={T.muted}>Sin funciones programadas hoy</text>
                     ) : (
                       t.showtimes.map((st: Showtime, sIdx: number) => {
-                        let badgeColor = st.isPassed ? "gray" : "green";
+                        let badgeColor = st.isPassed ? T.muted : T.success;
                         if (!st.isPassed) {
-                          if (st.room.includes("4DX")) badgeColor = "magenta";
-                          else if (st.room.includes("VIP")) badgeColor = "yellow";
-                          else if (st.lang.includes("SUB")) badgeColor = "cyan";
+                          if (st.room.includes("4DX")) badgeColor = T.accent;
+                          else if (st.room.includes("VIP")) badgeColor = T.warn;
+                          else if (st.lang.includes("SUB")) badgeColor = T.info;
+                          if (st.seatsAvailable === 0) badgeColor = T.danger;
+                          else if (st.seatsAvailable !== undefined && st.seatsAvailable <= 10) badgeColor = T.warn;
                         }
                         const cleanLang = st.lang && st.lang !== "N/A" ? ` ${st.lang}` : "";
+                        const seatsLabel = st.seatsAvailable === undefined
+                          ? ""
+                          : st.seatsAvailable === 0
+                            ? " · AGOTADA"
+                            : ` · ${st.seatsAvailable} asientos`;
                         return (
                           <box key={sIdx} marginRight={1} marginBottom={1}>
                             <text fg={badgeColor}>
-                              <strong>[{st.time} {st.room}{cleanLang}]</strong>
+                              <strong>[{st.time} {st.room}{cleanLang}{seatsLabel}]</strong>
                             </text>
                           </box>
                         );
@@ -363,8 +373,8 @@ function CinexApp({ initialState = defaultTuiViewState }: { initialState?: TuiVi
         </box>
 
         {/* Footer Bar */}
-        <box flexShrink={0} paddingX={1} style={{ backgroundColor: "blue" }}>
-          <text fg="white"><strong> Presiona [Esc/q] Volver | [↑/↓] Navegar salas | [p] Poster | [t] Trailer | [o] Abrir Web</strong></text>
+        <box flexShrink={0} paddingX={1} style={{ backgroundColor: T.footerBg }}>
+          <text fg={T.text}><strong> Presiona [Esc/q] Volver | [↑/↓] Navegar salas | [p] Poster | [t] Trailer | [o] Abrir Web</strong></text>
         </box>
       </box>
     );
@@ -379,19 +389,19 @@ function CinexApp({ initialState = defaultTuiViewState }: { initialState?: TuiVi
     // Keep the dashboard in its own reconciliation tree when closing the detail modal.
     <box key="dashboard" width={columns} height={rows} flexDirection="column" padding={1}>
       {/* Header */}
-      <box border padding={1} flexDirection="row" justifyContent="space-between" style={{ borderColor: "cyan" }}>
+      <box border padding={1} flexDirection="row" justifyContent="space-between" style={{ borderColor: T.borderMain }}>
         <box flexDirection="row">
-          <text fg="yellow"><strong>{NF.film} CINEX</strong></text>
-          <text fg="gray">  | {NF.city} Ciudad: </text>
-          <text fg="cyan"><strong>{selectedCity}</strong></text>
-          <text fg="gray">  | Cache: </text>
-          <text fg={cacheInfo.ageMinutes < 30 ? "green" : "yellow"}>
+          <text fg={T.header}><strong>{NF.film} CINEX</strong></text>
+          <text fg={T.muted}>  | {NF.city} Ciudad: </text>
+          <text fg={T.title}><strong>{selectedCity}</strong></text>
+          <text fg={T.muted}>  | Cache: </text>
+          <text fg={cacheInfo.ageMinutes < 30 ? T.success : T.warn}>
             <strong>{cacheInfo.ageMinutes === 0 ? "En vivo" : `hace ${cacheInfo.ageMinutes} min`}</strong>
           </text>
         </box>
         <box flexDirection="row">
-          <text fg="gray">Categoria: </text>
-          <text fg="green">
+          <text fg={T.muted}>Categoria: </text>
+          <text fg={T.success}>
             <strong>{activeTab === "movies" ? `${NF.film} Peliculas` : activeTab === "cinemas" ? `${NF.theater} Cines` : `${NF.city} Ciudades`}</strong>
           </text>
         </box>
@@ -399,18 +409,18 @@ function CinexApp({ initialState = defaultTuiViewState }: { initialState?: TuiVi
 
       {/* Tabs bar */}
       <box flexDirection="row" marginY={1} height={1} alignItems="center">
-        <box paddingX={2} height={1} style={{ backgroundColor: activeTab === "movies" ? "cyan" : "black" }}>
-          <text fg={activeTab === "movies" ? "black" : "white"}>
+        <box paddingX={2} height={1} style={{ backgroundColor: activeTab === "movies" ? T.tabActiveBg : T.tabInactiveBg }}>
+          <text fg={activeTab === "movies" ? T.tabActiveText : T.tabInactiveText}>
             <strong>[1] {NF.film} Peliculas ({filteredMovies.length})</strong>
           </text>
         </box>
-        <box paddingX={2} height={1} style={{ backgroundColor: activeTab === "cinemas" ? "cyan" : "black" }}>
-          <text fg={activeTab === "cinemas" ? "black" : "white"}>
+        <box paddingX={2} height={1} style={{ backgroundColor: activeTab === "cinemas" ? T.tabActiveBg : T.tabInactiveBg }}>
+          <text fg={activeTab === "cinemas" ? T.tabActiveText : T.tabInactiveText}>
             <strong>[2] {NF.theater} Cines ({filteredCinemas.length})</strong>
           </text>
         </box>
-        <box paddingX={2} height={1} style={{ backgroundColor: activeTab === "cities" ? "cyan" : "black" }}>
-          <text fg={activeTab === "cities" ? "black" : "white"}>
+        <box paddingX={2} height={1} style={{ backgroundColor: activeTab === "cities" ? T.tabActiveBg : T.tabInactiveBg }}>
+          <text fg={activeTab === "cities" ? T.tabActiveText : T.tabInactiveText}>
             <strong>[3] {NF.city} Ciudades ({filteredCities.length})</strong>
           </text>
         </box>
@@ -418,22 +428,22 @@ function CinexApp({ initialState = defaultTuiViewState }: { initialState?: TuiVi
 
       {isSearching ? (
         <box marginBottom={1}>
-          <text fg="magenta"><strong>{NF.search} Buscar: {searchQuery || "_"}  [Enter] Aplicar | [Esc] Limpiar</strong></text>
+          <text fg={T.accent}><strong>{NF.search} Buscar: {searchQuery || "_"}  [Enter] Aplicar | [Esc] Limpiar</strong></text>
         </box>
       ) : searchQuery && (
         <box marginBottom={1}>
-          <text fg="magenta">{NF.search} Filtro: "{searchQuery}" ([/] editar | [Esc] limpiar)</text>
+          <text fg={T.accent}>{NF.search} Filtro: "{searchQuery}" ([/] editar | [Esc] limpiar)</text>
         </box>
       )}
 
       {loading ? (
         <box flexGrow={1} justifyContent="center" alignItems="center">
-          <text fg="yellow"><strong>{currentSpinnerFrame} Cargando cartelera y funciones de Cinex Venezuela...</strong></text>
+          <text fg={T.header}><strong>{currentSpinnerFrame} Cargando cartelera y funciones de Cinex Venezuela...</strong></text>
         </box>
       ) : (
         <box flexDirection="row" flexGrow={1}>
           {/* Left Master List */}
-          <box width="45%" border padding={1} flexDirection="column" style={{ borderColor: "white" }}>
+          <box width="45%" border padding={1} flexDirection="column" style={{ borderColor: T.text }}>
             <scrollbox height={rows - 10}>
               {activeTab === "movies" &&
                 filteredMovies.map((m: Movie, idx: number) => {
@@ -443,15 +453,15 @@ function CinexApp({ initialState = defaultTuiViewState }: { initialState?: TuiVi
                       key={m.id}
                       paddingX={1}
                       marginBottom={1}
-                      style={{ backgroundColor: isSelected ? "blue" : "transparent" }}
+                      style={{ backgroundColor: isSelected ? T.selectedBg : "transparent" }}
                     >
-                      <text fg={isSelected ? "yellow" : "white"}>
+                      <text fg={isSelected ? T.selectedText : T.text}>
                         <strong>
                           {isSelected ? `${NF.arrow} ` : "  "}
                           [{m.censorship}] {m.title}
                         </strong>
                       </text>
-                      <text fg={isSelected ? "white" : "gray"}>
+                      <text fg={isSelected ? T.selectedSubText : T.muted}>
                         {" "} | {m.durationMinutes} min • {m.genre}
                       </text>
                     </box>
@@ -466,15 +476,15 @@ function CinexApp({ initialState = defaultTuiViewState }: { initialState?: TuiVi
                       key={idx}
                       paddingX={1}
                       marginBottom={1}
-                      style={{ backgroundColor: isSelected ? "blue" : "transparent" }}
+                      style={{ backgroundColor: isSelected ? T.selectedBg : "transparent" }}
                     >
-                      <text fg={isSelected ? "yellow" : "white"}>
+                      <text fg={isSelected ? T.selectedText : T.text}>
                         <strong>
                           {isSelected ? `${NF.arrow} ` : "  "}
                           {NF.theater} {c.name}
                         </strong>
                       </text>
-                      <text fg={isSelected ? "white" : "gray"}>
+                      <text fg={isSelected ? T.selectedSubText : T.muted}>
                         {" "} | {c.city}
                       </text>
                     </box>
@@ -490,9 +500,9 @@ function CinexApp({ initialState = defaultTuiViewState }: { initialState?: TuiVi
                       key={idx}
                       paddingX={1}
                       marginBottom={1}
-                      style={{ backgroundColor: isSelected ? "blue" : "transparent" }}
+                      style={{ backgroundColor: isSelected ? T.selectedBg : "transparent" }}
                     >
-                      <text fg={isSelected ? "yellow" : isCurrentCity ? "green" : "white"}>
+                      <text fg={isSelected ? T.selectedText : isCurrentCity ? T.success : T.text}>
                         <strong>
                           {isSelected ? `${NF.arrow} ` : "  "}
                           {NF.city} {city.name} {isCurrentCity ? `${NF.check} (Activa)` : ""}
@@ -505,53 +515,59 @@ function CinexApp({ initialState = defaultTuiViewState }: { initialState?: TuiVi
           </box>
 
           {/* Right Detail Inspector */}
-          <box width="55%" border padding={1} flexDirection="column" style={{ borderColor: "gray" }}>
+          <box width="55%" border padding={1} flexDirection="column" style={{ borderColor: T.borderInner }}>
             {activeTab === "movies" && activeMovie && (
               <scrollbox height={rows - 10}>
-                <text fg="yellow"><strong>{NF.film} {activeMovie.title}</strong></text>
-                <text fg="gray">{NF.clock} Duracion: {activeMovie.durationMinutes} mins | Censura: {activeMovie.censorship} | Genero: {activeMovie.genre}</text>
-                <text fg="magenta">Formatos: {activeMovie.formats.join(" / ")}</text>
+                <text fg={T.header}><strong>{NF.film} {activeMovie.title}</strong></text>
+                <text fg={T.muted}>{NF.clock} Duracion: {activeMovie.durationMinutes} mins | Censura: {activeMovie.censorship} | Genero: {activeMovie.genre}</text>
+                <text fg={T.accent}>Formatos: {activeMovie.formats.join(" / ")}</text>
                 
                 <box height={1} />
-                <text fg="cyan"><strong>[SINOPSIS]</strong></text>
-                <text fg="white">{activeMovie.synopsis.slice(0, 250)}...</text>
+                <text fg={T.title}><strong>[SINOPSIS]</strong></text>
+                <text fg={T.text}>{activeMovie.synopsis.slice(0, 250)}...</text>
                 <box height={1} />
-                <text fg="green"><strong>{NF.ticket} SALAS Y HORARIOS ({activeMovie.theaters.length} cines):</strong></text>
+                <text fg={T.success}><strong>{NF.ticket} SALAS Y HORARIOS ({activeMovie.theaters.length} cines):</strong></text>
                 {activeMovie.theaters.slice(0, 5).map((t: TheaterShowtimes, idx: number) => (
                   <box key={idx} flexDirection="column" marginTop={1}>
-                    <text fg="yellow"><strong>• {t.cinemaName} ({t.city || "VE"})</strong></text>
-                    <text fg="gray">
+                    <text fg={T.header}><strong>• {t.cinemaName} ({t.city || "VE"})</strong></text>
+                    <text fg={T.muted}>
                       {t.showtimes
                         .slice(0, 5)
-                        .map((s: Showtime) => `${s.time} (${s.room})`)
+                        .map((s: Showtime) => {
+                          const seats = s.seatsAvailable === undefined ? "" : s.seatsAvailable === 0 ? " [AGOTADA]" : ` [${s.seatsAvailable} asientos]`;
+                          return `${s.time} (${s.room})${seats}`;
+                        })
                         .join("  •  ") || "Sin funciones hoy"}
                     </text>
                   </box>
                 ))}
                 <box height={1} />
-                <text fg="yellow">💡 Presiona [ENTER] para detalle o [p] {NF.image} para ver el poster en la terminal.</text>
+                <text fg={T.header}>{NF.bulb} Presiona [ENTER] para detalle o [p] {NF.image} para ver el poster en la terminal.</text>
               </scrollbox>
             )}
 
             {activeTab === "cinemas" && activeCinema && (
               <scrollbox height={rows - 10}>
-                <text fg="yellow"><strong>{NF.theater} CINEX {activeCinema.name}</strong></text>
-                <text fg="cyan">Ciudad: {activeCinema.city}</text>
-                <text fg="gray">Direccion: {activeCinema.address}</text>
+                <text fg={T.header}><strong>{NF.theater} CINEX {activeCinema.name}</strong></text>
+                <text fg={T.title}>Ciudad: {activeCinema.city}</text>
+                <text fg={T.muted}>Direccion: {activeCinema.address}</text>
                 <box height={1} />
-                <text fg="green"><strong>[PELICULAS EN CARTELERA EN ESTE CINE]</strong></text>
+                <text fg={T.success}><strong>[PELICULAS EN CARTELERA EN ESTE CINE]</strong></text>
                 {movies
                   .filter((m: Movie) => m.theaters.some((t: TheaterShowtimes) => t.cinemaName.toUpperCase() === activeCinema.name.toUpperCase()))
                   .map((m: Movie, idx: number) => {
                     const th = m.theaters.find((t: TheaterShowtimes) => t.cinemaName.toUpperCase() === activeCinema.name.toUpperCase());
                     return (
                       <box key={idx} flexDirection="column" marginTop={1}>
-                        <text fg="yellow"><strong>• {m.title} ({m.durationMinutes} min)</strong></text>
-                        <text fg="gray">
+                        <text fg={T.header}><strong>• {m.title} ({m.durationMinutes} min)</strong></text>
+                        <text fg={T.muted}>
                           Horarios:{" "}
                           {th?.showtimes
                             .slice(0, 6)
-                            .map((s: Showtime) => `${s.time} (${s.room})`)
+                            .map((s: Showtime) => {
+                              const seats = s.seatsAvailable === undefined ? "" : s.seatsAvailable === 0 ? " [AGOTADA]" : ` [${s.seatsAvailable}]`;
+                              return `${s.time} (${s.room})${seats}`;
+                            })
                             .join("  •  ") || "Consultar"}
                         </text>
                       </box>
@@ -562,10 +578,10 @@ function CinexApp({ initialState = defaultTuiViewState }: { initialState?: TuiVi
 
             {activeTab === "cities" && (
               <box flexDirection="column">
-                <text fg="yellow"><strong>[FILTRO POR CIUDAD]</strong></text>
-                <text fg="white">Selecciona una ciudad en la lista izquierda y presiona [ENTER] para filtrar las peliculas y cines de esa localidad.</text>
+                <text fg={T.header}><strong>[FILTRO POR CIUDAD]</strong></text>
+                <text fg={T.text}>Selecciona una ciudad en la lista izquierda y presiona [ENTER] para filtrar las peliculas y cines de esa localidad.</text>
                 <box height={1} />
-                <text fg="green">Ciudad activa actualmente: {selectedCity}</text>
+                <text fg={T.success}>Ciudad activa actualmente: {selectedCity}</text>
               </box>
             )}
           </box>
@@ -573,8 +589,8 @@ function CinexApp({ initialState = defaultTuiViewState }: { initialState?: TuiVi
       )}
 
       {/* Footer Hotkeys Bar */}
-      <box border marginTop={1} paddingX={1} flexDirection="row" justifyContent="space-between" style={{ borderColor: "cyan" }}>
-        <text fg="yellow">
+      <box border marginTop={1} paddingX={1} flexDirection="row" justifyContent="space-between" style={{ borderColor: T.borderMain }}>
+        <text fg={T.header}>
           <strong>[Tab/1-3] Cambiar vista  |  [/] Buscar  |  [↑/↓] Navegar  |  [Enter] Detalle  |  [p] Poster  |  [t] Trailer  |  [r] Recargar  |  [q] Salir</strong>
         </text>
       </box>

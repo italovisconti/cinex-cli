@@ -6,14 +6,24 @@ import { playTrailerInTerminal } from "./video";
 import { getGlyphs } from "./glyphs";
 import { startCliSpinner } from "./spinner";
 import { renderTUI } from "./tui";
+import { getTheme } from "./theme";
+import type { Showtime } from "./types";
+
+function seatsInfo(s: Showtime, T: ReturnType<typeof getTheme>["cli"]): string {
+  if (s.seatsAvailable === undefined) return "";
+  if (s.seatsAvailable <= 0) return T.danger("[AGOTADA]");
+  if (s.seatsAvailable <= 10) return T.warn(`[${s.seatsAvailable} asientos]`);
+  return T.success(`[${s.seatsAvailable} asientos]`);
+}
 
 export async function runCLI(args: string[]) {
   const program = new Command();
   const NF = getGlyphs();
+  const T = getTheme().cli;
 
   program
     .name("cinex")
-    .description(pc.bold(pc.cyan(`${NF.film} CINEX CLI & TUI - Cartelera, peliculas, cines, horarios, sinopsis y posters`)))
+    .description(pc.bold(T.title(`${NF.film} CINEX CLI & TUI - Cartelera, peliculas, cines, horarios, sinopsis y posters`)))
     .version("1.1.1");
 
   program
@@ -45,25 +55,25 @@ export async function runCLI(args: string[]) {
       }
 
       if (movies.length === 0) {
-        console.log(pc.yellow("[!] No se encontraron peliculas con los filtros especificados."));
+        console.log(T.warn("[!] No se encontraron peliculas con los filtros especificados."));
         return;
       }
 
-      console.log(pc.cyan("\n[+] Cartelera actual de Cinex Venezuela:\n"));
-      console.log(pc.bold(pc.white(`   ${"TITULO".padEnd(28)} ${"DURACION".padEnd(12)} ${"CENSURA".padEnd(10)} ${"GENERO".padEnd(15)} FORMATOS`)));
-      console.log(pc.gray("─".repeat(85)));
+      console.log(T.title("\n[+] Cartelera actual de Cinex Venezuela:\n"));
+      console.log(pc.bold(T.text(`   ${"TITULO".padEnd(28)} ${"DURACION".padEnd(12)} ${"CENSURA".padEnd(10)} ${"GENERO".padEnd(15)} FORMATOS`)));
+      console.log(T.muted("─".repeat(85)));
 
       movies.forEach((m) => {
         const dur = `${m.durationMinutes} min`;
-        const censBg = m.censorship === "A" ? pc.bgGreen(pc.black(` ${m.censorship} `)) : (m.censorship === "B" ? pc.bgYellow(pc.black(` ${m.censorship} `)) : pc.bgRed(pc.white(` ${m.censorship} `)));
-        const titleStr = pc.bold(pc.cyan(m.title.slice(0, 27).padEnd(28)));
+        const censBg = m.censorship === "A" ? T.badgeA(` ${m.censorship} `) : (m.censorship === "B" ? T.badgeB(` ${m.censorship} `) : T.badgeC(` ${m.censorship} `));
+        const titleStr = pc.bold(T.title(m.title.slice(0, 27).padEnd(28)));
         const formatsStr = pc.dim(m.formats.slice(0, 4).join(", "));
         console.log(`   ${titleStr} ${dur.padEnd(12)} ${censBg.padEnd(10)} ${m.genre.padEnd(15)} ${formatsStr}`);
       });
 
-      console.log(pc.gray("\nTip: ") + pc.green("cinex show <titulo>") + pc.gray(" para ver sinopsis, poster y horarios."));
-      console.log(pc.gray("     ") + pc.green("cinex trailer <titulo>") + pc.gray(" para reproducir el trailer en la terminal."));
-      console.log(pc.gray("     ") + pc.green("cinex tui") + pc.gray(" para la interfaz grafica interactiva.\n"));
+      console.log(T.muted("\nTip: ") + T.success("cinex show <titulo>") + T.muted(" para ver sinopsis, poster y horarios."));
+      console.log(T.muted("     ") + T.success("cinex trailer <titulo>") + T.muted(" para reproducir el trailer en la terminal."));
+      console.log(T.muted("     ") + T.success("cinex tui") + T.muted(" para la interfaz grafica interactiva.\n"));
     });
 
   program
@@ -80,8 +90,8 @@ export async function runCLI(args: string[]) {
       spinner.stop();
 
       if (!movie) {
-        console.log(pc.red(`[X] No se encontro ninguna pelicula que coincida con "${query}".`));
-        console.log(pc.gray("Peliculas disponibles: " + movies.map(m => m.title).join(", ")));
+        console.log(T.danger(`[X] No se encontro ninguna pelicula que coincida con "${query}".`));
+        console.log(T.muted("Peliculas disponibles: " + movies.map(m => m.title).join(", ")));
         return;
       }
 
@@ -89,36 +99,37 @@ export async function runCLI(args: string[]) {
         openPosterInBrowser(movie.posterUrl);
       }
 
-      console.log(pc.bold(pc.bgBlue(pc.white(`  ${NF.film} ${movie.title}  `))));
-      console.log(pc.bold(`Duracion: `) + pc.yellow(`${NF.clock} ${movie.durationMinutes} minutos`) + pc.bold(` | Censura: `) + pc.green(movie.censorship) + pc.bold(` | Genero: `) + pc.magenta(movie.genre));
-      console.log(pc.bold(`Formatos: `) + pc.cyan(movie.formats.join(" / ")));
+      console.log(pc.bold(T.header(`  ${NF.film} ${movie.title}  `)));
+      console.log(pc.bold(`Duracion: `) + T.warn(`${NF.clock} ${movie.durationMinutes} minutos`) + pc.bold(` | Censura: `) + T.success(movie.censorship) + pc.bold(` | Genero: `) + T.accent(movie.genre));
+      console.log(pc.bold(`Formatos: `) + T.info(movie.formats.join(" / ")));
       if (movie.youtubeUrl) {
-        console.log(pc.bold(`Trailer YouTube: `) + pc.blue(pc.underline(`${NF.play} ${movie.youtubeUrl}`)));
+        console.log(pc.bold(`Trailer YouTube: `) + T.link(pc.underline(`${NF.play} ${movie.youtubeUrl}`)));
       }
 
       if (options.poster !== false && movie.posterUrl) {
-        console.log(pc.gray(`\n${NF.image} POSTER DE LA PELICULA:`));
+        console.log(T.muted(`\n${NF.image} POSTER DE LA PELICULA:`));
         const art = await renderPosterInTerminal(movie.posterUrl, 42);
         console.log(art);
       }
 
-      console.log(pc.gray("\n" + "─".repeat(80)));
+      console.log(T.muted("\n" + "─".repeat(80)));
       console.log(pc.bold("[SINOPSIS]"));
-      console.log(pc.white(movie.synopsis));
-      console.log(pc.gray("─".repeat(80)));
+      console.log(T.text(movie.synopsis));
+      console.log(T.muted("─".repeat(80)));
 
       console.log(pc.bold(`\n${NF.ticket} HORARIOS Y SALAS (${movie.theaters.length} Cines):`));
 
       movie.theaters.forEach((t) => {
-        console.log(`\n  ${NF.arrow} ${pc.bold(pc.yellow(`${NF.theater} ${t.cinemaName}`))} ${pc.gray(`(${t.city || "Venezuela"})`)}`);
+        console.log(`\n  ${NF.arrow} ${pc.bold(T.warn(`${NF.theater} ${t.cinemaName}`))} ${T.muted(`(${t.city || "Venezuela"})`)}`);
         console.log(`    ${pc.dim(t.address)}`);
         
         if (t.showtimes.length === 0) {
-          console.log(`    ${pc.gray("Sin funciones registradas hoy.")}`);
+          console.log(`    ${T.muted("Sin funciones registradas hoy.")}`);
         } else {
           const formatted = t.showtimes.map(s => {
-            const timeStr = s.isPassed ? pc.gray(`${s.time} (${s.room}) [Proyectada]`) : pc.green(pc.bold(`${s.time}`)) + pc.dim(` (${s.room} ${s.lang})`);
-            return timeStr;
+            const seats = s.isPassed ? "" : seatsInfo(s, T);
+            const timeStr = s.isPassed ? T.muted(`${s.time} (${s.room}) [Proyectada]`) : T.success(pc.bold(`${s.time}`)) + pc.dim(` (${s.room} ${s.lang})`);
+            return `${timeStr} ${seats}`.trimEnd();
           }).join("  •  ");
           console.log(`    ${formatted}`);
         }
@@ -140,12 +151,12 @@ export async function runCLI(args: string[]) {
       spinner.stop();
 
       if (!movie || !movie.youtubeUrl) {
-        console.log(pc.red(`[X] No se encontro trailer para "${pelicula}".`));
+        console.log(T.danger(`[X] No se encontro trailer para "${pelicula}".`));
         return;
       }
 
       if (options.open) {
-        console.log(pc.green(`[+] Abriendo trailer oficial en YouTube: ${movie.youtubeUrl}`));
+        console.log(T.success(`[+] Abriendo trailer oficial en YouTube: ${movie.youtubeUrl}`));
         openPosterInBrowser(movie.youtubeUrl);
         return;
       }
@@ -161,16 +172,16 @@ export async function runCLI(args: string[]) {
       const movies = await fetchAllMovies();
       spinner.stop();
 
-      console.log(pc.bold(pc.bgRed(pc.white(`  ⚡ CINE 4DX - SALAS DE IMPACTO Y MOVIMIENTO  `))));
+      console.log(pc.bold(T.headerDanger(`  ${NF.bolt} CINE 4DX - SALAS DE IMPACTO Y MOVIMIENTO  `)));
       console.log("");
 
       movies.forEach(m => {
         const matchingTheaters = m.theaters.filter(t => t.showtimes.some(s => s.room.toUpperCase().includes("4DX")));
         if (matchingTheaters.length > 0) {
-          console.log(`🎬 ${pc.bold(pc.yellow(m.title))} ${pc.dim(`(${m.durationMinutes} min)`)}`);
+          console.log(`${NF.film} ${pc.bold(T.warn(m.title))} ${pc.dim(`(${m.durationMinutes} min)`)}`);
           matchingTheaters.forEach(t => {
             const shows = t.showtimes.filter(s => s.room.toUpperCase().includes("4DX")).map(s => `${s.time} [${s.status}]`).join(", ");
-            console.log(`   ▸ ${pc.cyan(t.cinemaName)} (${t.city}): ${shows}`);
+            console.log(`   ▸ ${T.info(t.cinemaName)} (${t.city}): ${shows}`);
           });
           console.log("");
         }
@@ -185,16 +196,16 @@ export async function runCLI(args: string[]) {
       const movies = await fetchAllMovies();
       spinner.stop();
 
-      console.log(pc.bold(pc.bgYellow(pc.black(`  ✨ CINEX VIP - SALAS EXCLUSIVAS  `))));
+      console.log(pc.bold(T.headerWarn(`  ${NF.sparkle} CINEX VIP - SALAS EXCLUSIVAS  `)));
       console.log("");
 
       movies.forEach(m => {
         const matchingTheaters = m.theaters.filter(t => t.showtimes.some(s => s.room.toUpperCase().includes("VIP")));
         if (matchingTheaters.length > 0) {
-          console.log(`🎬 ${pc.bold(pc.yellow(m.title))} ${pc.dim(`(${m.durationMinutes} min)`)}`);
+          console.log(`${NF.film} ${pc.bold(T.warn(m.title))} ${pc.dim(`(${m.durationMinutes} min)`)}`);
           matchingTheaters.forEach(t => {
             const shows = t.showtimes.filter(s => s.room.toUpperCase().includes("VIP")).map(s => `${s.time} [${s.status}]`).join(", ");
-            console.log(`   ▸ ${pc.cyan(t.cinemaName)} (${t.city}): ${shows}`);
+            console.log(`   ▸ ${T.info(t.cinemaName)} (${t.city}): ${shows}`);
           });
           console.log("");
         }
@@ -213,15 +224,15 @@ export async function runCLI(args: string[]) {
       spinner.stop();
 
       if (!movie) {
-        console.log(pc.red(`[X] No se encontro ninguna pelicula que coincida con "${pelicula}".`));
+        console.log(T.danger(`[X] No se encontro ninguna pelicula que coincida con "${pelicula}".`));
         return;
       }
 
-      console.log(pc.cyan("\n[+] Resumen generado para compartir (copia y pega en WhatsApp):\n"));
-      console.log(pc.gray("─".repeat(60)));
+      console.log(T.title("\n[+] Resumen generado para compartir (copia y pega en WhatsApp):\n"));
+      console.log(T.muted("─".repeat(60)));
       const shareText = generateShareText(movie, cine);
-      console.log(pc.white(shareText));
-      console.log(pc.gray("─".repeat(60)));
+      console.log(T.text(shareText));
+      console.log(T.muted("─".repeat(60)));
       console.log("");
     });
 
@@ -239,16 +250,16 @@ export async function runCLI(args: string[]) {
       spinner.stop();
 
       if (!movie) {
-        console.log(pc.red(`[X] No se encontro ninguna pelicula que coincida con "${query}".`));
+        console.log(T.danger(`[X] No se encontro ninguna pelicula que coincida con "${query}".`));
         return;
       }
 
       if (options.open && movie.posterUrl) {
         openPosterInBrowser(movie.posterUrl);
-        console.log(pc.green(`${NF.plus} Abriendo poster en el navegador: ${movie.posterUrl}`));
+        console.log(T.success(`${NF.plus} Abriendo poster en el navegador: ${movie.posterUrl}`));
       }
 
-      console.log(pc.bold(pc.bgMagenta(pc.white(`  ${NF.image} ${movie.title} - Poster Oficial  `))));
+      console.log(pc.bold(T.headerAccent(`  ${NF.image} ${movie.title} - Poster Oficial  `)));
       console.log(pc.dim(`URL: ${movie.posterUrl}\n`));
 
       const widthNum = parseInt(options.width) || 45;
@@ -281,11 +292,11 @@ export async function runCLI(args: string[]) {
         byCity.set(c.city, list);
       });
 
-      console.log(pc.cyan("\n[+] Cines Cinex disponibles:\n"));
+      console.log(T.title("\n[+] Cines Cinex disponibles:\n"));
       byCity.forEach((list, city) => {
-        console.log(pc.bold(pc.bgMagenta(pc.white(`  ${NF.city} ${city} (${list.length} Cines)  `))));
+        console.log(pc.bold(T.headerAccent(`  ${NF.city} ${city} (${list.length} Cines)  `)));
         list.forEach(cin => {
-          console.log(`   • ${pc.bold(pc.cyan(cin.name.padEnd(25)))} - ${pc.dim(cin.address)}`);
+          console.log(`   • ${pc.bold(T.info(cin.name.padEnd(25)))} - ${pc.dim(cin.address)}`);
         });
         console.log("");
       });
@@ -314,24 +325,26 @@ export async function runCLI(args: string[]) {
       });
 
       if (matches.length === 0) {
-        console.log(pc.red(`[X] No se encontro ningun cine con el nombre "${nombre}".`));
+        console.log(T.danger(`[X] No se encontro ningun cine con el nombre "${nombre}".`));
         return;
       }
 
-      console.log(pc.bold(pc.bgCyan(pc.black(`  ${NF.theater} CINEX ${targetCinemaName}  `))));
+      console.log(pc.bold(T.headerInfo(`  ${NF.theater} CINEX ${targetCinemaName}  `)));
       if (matches[0] && matches[0].theater) {
         console.log(pc.dim(`Direccion: ${matches[0].theater.address}\n`));
       }
       console.log(pc.bold("Peliculas y Horarios disponibles:"));
-      console.log(pc.gray("─".repeat(70)));
+      console.log(T.muted("─".repeat(70)));
 
       matches.forEach(({ movie, theater }) => {
-        console.log(`\n${NF.arrow} ${pc.bold(pc.yellow(`${NF.film} ${movie.title}`))} ${pc.dim(`(${movie.durationMinutes} min | Censura ${movie.censorship})`)}`);
+        console.log(`\n${NF.arrow} ${pc.bold(T.warn(`${NF.film} ${movie.title}`))} ${pc.dim(`(${movie.durationMinutes} min | Censura ${movie.censorship})`)}`);
         if (theater.showtimes.length === 0) {
-          console.log(`   ${pc.gray("Sin funciones para hoy")}`);
+          console.log(`   ${T.muted("Sin funciones para hoy")}`);
         } else {
           const list = theater.showtimes.map(s => {
-            return s.isPassed ? pc.gray(`${s.time} (${s.room})`) : pc.green(pc.bold(`${s.time}`)) + pc.dim(` (${s.room} ${s.lang})`);
+            const seats = s.isPassed ? "" : seatsInfo(s, T);
+            const base = s.isPassed ? T.muted(`${s.time} (${s.room})`) : T.success(pc.bold(`${s.time}`)) + pc.dim(` (${s.room} ${s.lang})`);
+            return `${base} ${seats}`.trimEnd();
           }).join("  •  ");
           console.log(`   ${list}`);
         }
@@ -348,8 +361,8 @@ export async function runCLI(args: string[]) {
       const cities = await fetchCities();
       spinner.stop();
 
-      console.log(pc.cyan(`\n${NF.city} Ciudades disponibles:\n`));
-      cities.forEach(c => console.log(`   • ${pc.bold(pc.white(c.name))}`));
+      console.log(T.title(`\n${NF.city} Ciudades disponibles:\n`));
+      cities.forEach(c => console.log(`   • ${pc.bold(T.text(c.name))}`));
       console.log("");
     });
 

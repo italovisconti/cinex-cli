@@ -6,7 +6,19 @@ import type { Movie, Showtime, TheaterShowtimes, Cinema, City } from "./types";
 
 const BASE_URL = "https://www.cinex.com.ve";
 const CACHE_TTL_MS = 30 * 60 * 1000; // 30 minutos
+const SEATS_TTL_MS = 5 * 60 * 1000; // 5 minutos (los asientos cambian mas seguido)
 const CACHE_FILE_PATH = path.join(os.tmpdir(), "cinex_cli_cartelera_cache.json");
+
+interface SeatEntry {
+  cinemaid: string;
+  sessionid: string;
+  sala: string;
+  fecha: string;
+  hora: string;
+  numasientos: number;
+  texto: string;
+  clase: string;
+}
 
 interface PersistentCache {
   timestamp: number;
@@ -40,6 +52,57 @@ function writeCacheToDisk(movies: Movie[], cities: City[]) {
     };
     fs.writeFileSync(CACHE_FILE_PATH, JSON.stringify(data), "utf-8");
   } catch (_) {}
+}
+
+const seatsMemoryCache = new Map<string, { timestamp: number; data: SeatEntry[] }>();
+
+// Cinex expone la disponibilidad de asientos por cine en syncseats/{CODIGO}.data
+async function fetchCinemaSeats(cinemaCode: string): Promise<SeatEntry[]> {
+  const cached = seatsMemoryCache.get(cinemaCode);
+  if (cached && Date.now() - cached.timestamp < SEATS_TTL_MS) return cached.data;
+
+  try {
+    const res = await fetch(`${BASE_URL}/syncseats/${cinemaCode}.data`);
+    const data = (await res.json()) as SeatEntry[];
+    if (Array.isArray(data)) {
+      seatsMemoryCache.set(cinemaCode, { timestamp: Date.now(), data });
+      return data;
+    }
+  } catch (err) {
+    console.error(`Error fetching available seats for cinema ${cinemaCode}:`, err);
+  }
+
+  return cached ? cached.data : [];
+}
+
+// Actualiza los asientos disponibles de todas las funciones de las peliculas dadas.
+export async function refreshSeatsForMovies(movies: Movie[]): Promise<void> {
+  const codes = new Set<string>();
+  for (const m of movies) {
+    for (const t of m.theaters) {
+      if (t.cinemaCode) codes.add(t.cinemaCode);
+    }
+  }
+
+  const seatsByCode = new Map<string, Map<string, number>>();
+  await Promise.all([...codes].map(async (code) => {
+    const entries = await fetchCinemaSeats(code);
+    const bySession = new Map<string, number>();
+    for (const e of entries) bySession.set(String(e.sessionid), e.numasientos);
+    seatsByCode.set(code, bySession);
+  }));
+
+  for (const m of movies) {
+    for (const t of m.theaters) {
+      const bySession = t.cinemaCode ? seatsByCode.get(t.cinemaCode) : undefined;
+      if (!bySession) continue;
+      for (const st of t.showtimes) {
+        if (st.isPassed || !st.sessionId) continue;
+        const seats = bySession.get(st.sessionId);
+        if (typeof seats === "number") st.seatsAvailable = seats;
+      }
+    }
+  }
 }
 
 export function getCacheInfo(): { isCached: boolean; ageMinutes: number } {
@@ -192,14 +255,18 @@ export async function fetchMovieDetail(sinopsisFilename: string, basicMovie: any
 
     const processedTheaters = new Set<string>();
 
-    $("img.cinemapic").each((_, img) => {
+    for (const img of $("img.cinemapic").toArray()) {
       const name = ($(img).attr("title") || $(img).attr("alt") || "CINE").trim().toUpperCase();
-      if (!name || processedTheaters.has(name)) return;
+      if (!name || processedTheaters.has(name)) continue;
       processedTheaters.add(name);
 
       const parentRow = $(img).closest(".row");
       const address = parentRow.find("p").text().replace(/\s+/g, " ").trim();
       const city = determineCity(name, address);
+
+      const firstSessionEl = parentRow.find(".cinemasessionpos").first();
+      const codeMatch = (firstSessionEl.attr("onclick") || "").match(/checkLogin\('\d+','([A-Z0-9]+)'\)/i);
+      const cinemaCode = codeMatch ? codeMatch[1] : "";
 
       const showtimes: Showtime[] = [];
 
@@ -222,7 +289,8 @@ export async function fetchMovieDetail(sinopsisFilename: string, basicMovie: any
           time,
           lang,
           isPassed,
-          status: isPassed ? "Proyectada" : "Disponible"
+          status: isPassed ? "Proyectada" : "Disponible",
+          sessionId: btn.attr("alt") || undefined
         });
       });
 
@@ -230,9 +298,10 @@ export async function fetchMovieDetail(sinopsisFilename: string, basicMovie: any
         cinemaName: name,
         address: address || "Venezuela",
         city,
+        cinemaCode: cinemaCode || undefined,
         showtimes
       });
-    });
+    }
 
   } catch (err) {
     console.error(`Error loading movie detail ${sinopsisFilename}:`, err);
@@ -259,20 +328,40 @@ export async function fetchMovieDetail(sinopsisFilename: string, basicMovie: any
 export async function fetchAllMovies(forceRefresh = false): Promise<Movie[]> {
   const now = Date.now();
 
-  if (!forceRefresh && memoryMovies && (now - memoryTimestamp < CACHE_TTL_MS)) {
-    return memoryMovies;
-  }
+  let movies: Movie[];
 
-  if (!forceRefresh) {
+  if (!forceRefresh && memoryMovies && (now - memoryTimestamp < CACHE_TTL_MS)) {
+    movies = memoryMovies;
+  } else if (!forceRefresh) {
     const disk = readCacheFromDisk();
     if (disk && (now - disk.timestamp < CACHE_TTL_MS)) {
       memoryMovies = disk.movies;
       memoryCities = disk.cities;
       memoryTimestamp = disk.timestamp;
-      return memoryMovies;
+      movies = memoryMovies;
+    } else {
+      movies = await fetchMoviesFromSite();
     }
+  } else {
+    movies = await fetchMoviesFromSite();
   }
 
+  // Los asientos cambian mas seguido que la cartelera, se refrescan en cada llamada.
+  await refreshSeatsForMovies(movies);
+
+  if (movies === memoryMovies) return movies;
+
+  const cities = await fetchCities(forceRefresh);
+  memoryMovies = movies;
+  memoryCities = cities;
+  memoryTimestamp = Date.now();
+
+  writeCacheToDisk(movies, cities);
+
+  return movies;
+}
+
+async function fetchMoviesFromSite(): Promise<Movie[]> {
   const rawList = await fetchRawCartelera();
   const sinopsisMap = await getSinopsisLinksMap();
 
@@ -298,14 +387,6 @@ export async function fetchAllMovies(forceRefresh = false): Promise<Movie[]> {
     const movie = await fetchMovieDetail(sinopsisFile, raw);
     movies.push(movie);
   }
-
-  const cities = await fetchCities(forceRefresh);
-
-  memoryMovies = movies;
-  memoryCities = cities;
-  memoryTimestamp = Date.now();
-
-  writeCacheToDisk(movies, cities);
 
   return movies;
 }
@@ -335,16 +416,16 @@ export function extractAllCinemas(movies: Movie[]): Cinema[] {
 
 // Generate clean sharing text for WhatsApp/Telegram/Discord
 export function generateShareText(movie: Movie, cinemaName?: string): string {
-  let text = `🍿 *CINEX VENEZUELA* 🎬\n\n`;
+  let text = `*CINEX VENEZUELA*\n\n`;
   text += `*${movie.title}*\n`;
-  text += `⏱️ Duración: ${movie.durationMinutes} min | Censura: ${movie.censorship} | ${movie.genre}\n`;
-  text += `🎭 Formatos: ${movie.formats.join(" / ")}\n\n`;
+  text += `Duracion: ${movie.durationMinutes} min | Censura: ${movie.censorship} | ${movie.genre}\n`;
+  text += `Formatos: ${movie.formats.join(" / ")}\n\n`;
 
   const targetTheaters = cinemaName
     ? movie.theaters.filter(t => normalizeStr(t.cinemaName).includes(normalizeStr(cinemaName)))
     : movie.theaters.slice(0, 4);
 
-  text += `📍 *Horarios disponibles:*\n`;
+  text += `Horarios disponibles:\n`;
   targetTheaters.forEach(t => {
     const activeShows = t.showtimes.filter(s => !s.isPassed).map(s => `${s.time} (${s.room} ${s.lang})`).join(", ");
     if (activeShows) {
@@ -353,7 +434,7 @@ export function generateShareText(movie: Movie, cinemaName?: string): string {
   });
 
   if (movie.youtubeUrl) {
-    text += `\n▶️ Tráiler: ${movie.youtubeUrl}`;
+    text += `\nTrailer: ${movie.youtubeUrl}`;
   }
 
   return text;

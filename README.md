@@ -364,12 +364,36 @@ Para renderizar posters e imágenes oficiales sin distorsión dentro de la termi
 ## Fallback de Fuentes (Nerd Fonts vs ASCII)
 
 `cinex-cli` incluye un sistema inteligente de iconos:
-- Si tu terminal soporta **Nerd Fonts**, mostrara iconos vectoriales de peliculas, cines, relojes y salas (`󰿎`, `󰨄`, `󰈤`, `󰥔`, `󰓓`).
+- Si tu terminal soporta **Nerd Fonts**, mostrara iconos vectoriales de peliculas, cines, relojes y salas (`󰿎`, `󰨄`, `󰈤`, `󰥔`, `󰔖`).
 - Si tu terminal no tiene Nerd Fonts instaladas, utilizara automaticamente un **fallback ASCII limpio** (`[PELICULA]`, `[CINE]`, `[HORARIOS]`, `›`, `✓`).
 - Puedes forzar el modo sin Nerd Fonts configurando la variable `NO_NERD_FONTS=1`:
   ```bash
   NO_NERD_FONTS=1 cinex cartelera
   ```
+
+---
+
+## Temas de Color
+
+`cinex-cli` incluye dos paletas de colores:
+
+- **`cinex`** *(por defecto)*: paleta de marca extraída de [cinex.com.ve](https://www.cinex.com.ve/) (azul marino `#01105f`, bordo `#a11f3c`, menta `#2cdd9b`, celeste `#00b4ff`, rosa `#ff4d7e`, coral `#ff6a5b` y dorado `#ffc741`).
+- **`classic`**: la paleta original (cián, amarillo, verde, magenta, etc.).
+
+La selección del tema se resuelve así: la variable de entorno `CINEX_THEME` tiene prioridad, luego el archivo de configuración `~/.config/cinex-cli/config.json` (estándar XDG), y por defecto se usa `cinex`.
+
+Para volver a la paleta clásica:
+
+```bash
+# Opción 1: variable de entorno (por comando o sesión)
+CINEX_THEME=classic cinex cartelera
+
+# Opción 2: archivo de configuración persistente
+mkdir -p ~/.config/cinex-cli
+echo '{ "theme": "classic" }' > ~/.config/cinex-cli/config.json
+```
+
+En terminales con soporte TrueColor (`COLORTERM=truecolor`) tanto la CLI como la TUI usarán los colores hex exactos de la marca; en terminales de 16 colores la CLI hará un fallback a la paleta ANSI más cercana.
 
 ---
 

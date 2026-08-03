@@ -1,4 +1,4 @@
-import { execSync, spawn } from "child_process";
+import { execSync, spawn, type ChildProcess } from "child_process";
 import readline from "readline";
 import pc from "picocolors";
 import { openPosterInBrowser } from "./image";
@@ -32,41 +32,58 @@ export function isTimgInstalled(): boolean {
 
 function isExitKey(chunk: Buffer): boolean {
   const key = chunk.toString();
-  return key === "\u001b" || key === "q" || key === "Q" || key === "\u0003";
+  return key.includes("\u001b") || key.includes("\u0003") || /q/i.test(key);
+}
+
+function signalProcessTree(child: ChildProcess, signal: NodeJS.Signals) {
+  try {
+    if (process.platform !== "win32" && child.pid) {
+      process.kill(-child.pid, signal);
+      return;
+    }
+  } catch (_) {}
+
+  try {
+    child.kill(signal);
+  } catch (_) {}
+}
+
+function stopProcessTree(child: ChildProcess): () => void {
+  signalProcessTree(child, "SIGINT");
+  const terminateTimer = setTimeout(() => signalProcessTree(child, "SIGTERM"), 750);
+  const killTimer = setTimeout(() => signalProcessTree(child, "SIGKILL"), 1500);
+
+  return () => {
+    clearTimeout(terminateTimer);
+    clearTimeout(killTimer);
+  };
 }
 
 async function runPlayback(command: string, args: string[]): Promise<void> {
   await new Promise<void>((resolve) => {
-    const child = spawn(command, args, { stdio: ["ignore", "inherit", "inherit"] });
-    const wasRaw = process.stdin.isRaw;
+    const child = spawn(command, args, {
+      stdio: ["inherit", "inherit", "inherit"]
+    });
     let finished = false;
-
-    const cleanup = () => {
-      if (!process.stdin.isTTY) return;
-      process.stdin.removeListener("data", onData);
-      if (!wasRaw) process.stdin.setRawMode(false);
-      process.stdin.pause();
-    };
+    let clearKillTimer = () => {};
 
     const finish = () => {
       if (finished) return;
       finished = true;
-      cleanup();
+      clearKillTimer();
+      process.removeListener("SIGINT", onSigint);
       resolve();
     };
 
-    const onData = (chunk: Buffer) => {
-      if (isExitKey(chunk) && child.exitCode === null) {
-        child.kill("SIGINT");
-      }
+    const onSigint = () => {
+      try { child.kill("SIGINT"); } catch (_) {}
+      const timer = setTimeout(() => {
+        try { child.kill("SIGKILL"); } catch (_) {}
+      }, 1500);
+      clearKillTimer = () => clearTimeout(timer);
     };
 
-    if (process.stdin.isTTY) {
-      if (!wasRaw) process.stdin.setRawMode(true);
-      process.stdin.resume();
-      process.stdin.on("data", onData);
-    }
-
+    process.on("SIGINT", onSigint);
     child.once("close", finish);
     child.once("error", finish);
   });
@@ -110,11 +127,15 @@ export async function playTrailerInTerminal(
     ];
 
     await new Promise<void>((resolve, reject) => {
-      const child = spawn(ytDlpBin, dlArgs, { stdio: ["ignore", "pipe", "pipe"] });
+      const child = spawn(ytDlpBin, dlArgs, {
+        stdio: ["ignore", "pipe", "pipe"],
+        detached: process.platform !== "win32"
+      });
 
       let keyHandler: ((chunk: Buffer) => void) | null = null;
       let cancelRequested = false;
       let settled = false;
+      let clearStopTimers = () => {};
 
       const cleanupKeys = () => {
         if (keyHandler && process.stdin.isTTY) {
@@ -124,6 +145,8 @@ export async function playTrailerInTerminal(
             process.stdin.pause();
           } catch (_) {}
         }
+        process.removeListener("SIGINT", onSigint);
+        clearStopTimers();
       };
 
       const rejectOnce = (error: Error) => {
@@ -140,13 +163,19 @@ export async function playTrailerInTerminal(
           keyHandler = (chunk: Buffer) => {
             if (isExitKey(chunk) && !cancelRequested) {
               cancelRequested = true;
-              child.kill("SIGINT");
+              clearStopTimers = stopProcessTree(child);
               try { execSync(`rm -f "${tmpVideo}"`); } catch (_) {}
             }
           };
           process.stdin.on("data", keyHandler);
         } catch (_) {}
       }
+      const onSigint = () => {
+        if (cancelRequested) return;
+        cancelRequested = true;
+        clearStopTimers = stopProcessTree(child);
+      };
+      process.on("SIGINT", onSigint);
 
       child.stdout.on("data", (data: Buffer) => {
         const text = data.toString();
