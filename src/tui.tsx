@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from "react";
 import { createCliRenderer, type ScrollBoxRenderable } from "@opentui/core";
 import { createRoot, useKeyboard, useRenderer, useTerminalDimensions } from "@opentui/react";
 import { fetchAllMovies, extractAllCinemas, fetchCities, getCacheInfo, normalizeStr } from "./api";
-import { showPosterInTerminal, openPosterInBrowser } from "./image";
+import { showPosterInTerminal, openPosterInBrowser, renderPosterPreview, type PosterPreview } from "./image";
 import { playTrailerInTerminal } from "./video";
 import { getGlyphs } from "./glyphs";
 import { getTheme } from "./theme";
@@ -35,6 +35,9 @@ function CinexApp({ initialState = defaultTuiViewState }: { initialState?: TuiVi
   const NF = getGlyphs();
   const T = getTheme().tui;
   const spinnerFrames = getSpinnerFrames();
+  const posterPreviewWidth = Math.min(32, Math.floor(columns * 0.45) - 6);
+  const posterPreviewHeight = Math.min(18, Math.max(0, rows - 30));
+  const canShowPosterPreview = posterPreviewWidth >= 20 && posterPreviewHeight >= 10;
 
   const [loading, setLoading] = useState(true);
   const [movies, setMovies] = useState<Movie[]>([]);
@@ -51,6 +54,7 @@ function CinexApp({ initialState = defaultTuiViewState }: { initialState?: TuiVi
 
   const [detailModalMovie, setDetailModalMovie] = useState<Movie | null>(initialState.detailModalMovie);
   const [modalScrollTop, setModalScrollTop] = useState(0);
+  const [posterPreview, setPosterPreview] = useState<PosterPreview | null>(null);
   const theatersScrollRef = useRef<ScrollBoxRenderable>(null);
   const masterListScrollRef = useRef<ScrollBoxRenderable>(null);
 
@@ -89,6 +93,21 @@ function CinexApp({ initialState = defaultTuiViewState }: { initialState?: TuiVi
   useEffect(() => {
     theatersScrollRef.current?.scrollTo({ x: 0, y: modalScrollTop });
   }, [modalScrollTop, detailModalMovie]);
+
+  useEffect(() => {
+    if (!detailModalMovie || !canShowPosterPreview) {
+      setPosterPreview(null);
+      return;
+    }
+
+    let cancelled = false;
+    void renderPosterPreview(detailModalMovie.posterUrl, posterPreviewWidth, posterPreviewHeight).then((preview) => {
+      if (!cancelled) setPosterPreview(preview);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [detailModalMovie, canShowPosterPreview, posterPreviewWidth, posterPreviewHeight]);
 
   useEffect(() => {
     masterListScrollRef.current?.scrollChildIntoView(`master-item-${selectedIndex}`);
@@ -196,6 +215,7 @@ function CinexApp({ initialState = defaultTuiViewState }: { initialState?: TuiVi
         setDetailModalMovie(null);
         setDetailSearchQuery("");
         setIsDetailSearching(false);
+        setPosterPreview(null);
         setModalScrollTop(0);
         return;
       }
@@ -251,6 +271,7 @@ function CinexApp({ initialState = defaultTuiViewState }: { initialState?: TuiVi
         }
         setDetailModalMovie(null);
         setIsDetailSearching(false);
+        setPosterPreview(null);
         setModalScrollTop(0);
         return;
       }
@@ -353,6 +374,7 @@ function CinexApp({ initialState = defaultTuiViewState }: { initialState?: TuiVi
         setDetailModalMovie(filteredMovies[selectedIndex]);
         setDetailSearchQuery("");
         setIsDetailSearching(false);
+        setPosterPreview(null);
         setModalScrollTop(0);
       } else if (activeTab === "cities" && filteredCities[selectedIndex]) {
         setSelectedCity(filteredCities[selectedIndex].name);
@@ -364,7 +386,9 @@ function CinexApp({ initialState = defaultTuiViewState }: { initialState?: TuiVi
 
   // Render Full Screen Movie Detail Modal
   if (detailModalMovie) {
-    const synopsisHeight = Math.max(3, Math.min(8, rows - 12));
+    const synopsisHeight = posterPreview
+      ? Math.max(3, Math.min(5, rows - posterPreviewHeight - 18))
+      : Math.max(3, Math.min(8, rows - 12));
 
     return (
       // A distinct key prevents the main view's layout nodes from being reused by the modal.
@@ -387,6 +411,17 @@ function CinexApp({ initialState = defaultTuiViewState }: { initialState?: TuiVi
         <box height={0} flexDirection="row" flexGrow={1} overflow="hidden">
           {/* Left Column */}
           <box width="45%" flexDirection="column" paddingX={1} border style={{ borderColor: T.borderInner }}>
+            {posterPreview && (
+              <box flexDirection="column" alignItems="center" flexShrink={0} marginBottom={1}>
+                {posterPreview.map((line, lineIndex) => (
+                  <box key={lineIndex} flexDirection="row" height={1}>
+                    {line.map((span, spanIndex) => (
+                      <text key={spanIndex} fg={span.fg} bg={span.bg}>{span.text}</text>
+                    ))}
+                  </box>
+                ))}
+              </box>
+            )}
             <text fg={T.title}><strong>[SINOPSIS]</strong></text>
             <scrollbox height={synopsisHeight} marginBottom={1}>
               <text fg={T.text}>{detailModalMovie.synopsis}</text>

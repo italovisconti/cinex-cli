@@ -190,6 +190,8 @@ bun run tui
 - `[Esc]`: Cerrar modal, cancelar la busqueda activa o limpiar el filtro aplicado.
 - `[q]`: Salir de la aplicacion.
 
+> Con espacio suficiente, el detalle de una pelicula muestra un preview inline del poster sobre la sinopsis. Si no se puede generar, el modal conserva su layout y `[p]` sigue mostrando el poster completo.
+
 ---
 
 ### Cartelera de Peliculas
