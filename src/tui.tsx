@@ -364,7 +364,7 @@ function CinexApp({ initialState = defaultTuiViewState }: { initialState?: TuiVi
 
         {/* Footer Bar */}
         <box flexShrink={0} paddingX={1} style={{ backgroundColor: "blue" }}>
-          <text fg="white"><strong> Presiona [Esc] Volver | [↑/↓] Navegar salas | [p] Poster | [t] Trailer | [o] Abrir Web</strong></text>
+          <text fg="white"><strong> Presiona [Esc/q] Volver | [↑/↓] Navegar salas | [p] Poster | [t] Trailer | [o] Abrir Web</strong></text>
         </box>
       </box>
     );
